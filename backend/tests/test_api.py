@@ -57,10 +57,11 @@ def test_what_if_is_explicitly_decision_support():
     assert 'disclaimer' in payload
 
 
-def test_sumo_micro_twin_produces_traci_coordinates():
+def test_sumo_micro_twin_produces_fcd_trajectories():
     status = client.get('/api/v2/sumo/status').json()
     assert status['sumo'] is True
     assert status['netconvert'] is True
+    assert status['transport'] == 'SUMO FCD subprocess export'
 
     response = client.get('/api/v2/sumo/bus/MTC-021')
     assert response.status_code == 200
@@ -69,6 +70,7 @@ def test_sumo_micro_twin_produces_traci_coordinates():
     assert payload['engine'] == 'SUMO'
     assert payload['physics']['car_following'] == 'IDM'
     assert payload['physics']['lane_change'] == 'LC2013'
+    assert payload['summary']['source'] == 'LIVE SUMO FCD TRAJECTORIES'
     assert len(payload['frames']) > 40
     vehicles = [v for frame in payload['frames'] for v in frame['vehicles']]
     assert vehicles
