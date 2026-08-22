@@ -63,36 +63,56 @@ def _write_scenario(root: Path, bus_id: str, seed: int) -> tuple[Path, str]:
 
     rng = random.Random(seed)
     vtypes = [
-        ("car", 4.5, 1.8, 2.6, 4.5, "passenger"),
-        ("bike", 2.1, 0.8, 3.4, 5.0, "motorcycle"),
-        ("auto", 2.8, 1.4, 2.4, 4.5, "passenger"),
-        ("bus", 11.8, 2.5, 1.5, 3.5, "bus"),
-        ("truck", 9.5, 2.5, 1.2, 3.0, "truck"),
-        ("van", 5.2, 2.0, 2.0, 4.0, "delivery"),
+        ("car", 4.5, 1.8, 2.6, 4.5, "passenger", 16.7),
+        ("bike", 2.1, 0.8, 3.4, 5.0, "motorcycle", 18.0),
+        ("auto", 2.8, 1.4, 2.4, 4.5, "passenger", 13.5),
+        ("bus", 11.8, 2.5, 1.5, 3.5, "bus", 13.0),
+        ("truck", 9.5, 2.5, 1.2, 3.0, "truck", 11.0),
+        ("van", 5.2, 2.0, 2.0, 4.0, "delivery", 15.0),
+        ("slowTruck", 10.5, 2.5, 0.9, 2.8, "truck", 7.5),
     ]
     lines = ["<routes>"]
-    for name, length, width, accel, decel, vclass in vtypes:
+    for name, length, width, accel, decel, vclass, max_speed in vtypes:
         lines.append(
             f'  <vType id="{name}" vClass="{vclass}" length="{length}" width="{width}" '
             f'accel="{accel}" decel="{decel}" minGap="1.2" sigma="0.35" carFollowModel="IDM" '
-            f'lcStrategic="1.0" lcCooperative="0.7" lcSpeedGain="1.0" lcKeepRight="0.6"/>'
+            f'laneChangeModel="LC2013" lcStrategic="1.0" lcCooperative="0.7" lcSpeedGain="1.0" '
+            f'lcKeepRight="0.55" maxSpeed="{max_speed}"/>'
         )
     lines.append('  <route id="corridor" edges="e0 e1 e2"/>')
+
+    # Seed traffic ahead of the ego bus so the bus must react, brake and change lanes.
+    lead_specs = [
+        ("lead_car_0", "car", 0.0, 0, 10.5),
+        ("lead_bike_0", "bike", 0.0, 2, 12.5),
+        ("lead_auto_0", "auto", 0.4, 0, 9.5),
+        ("lead_slow_truck", "slowTruck", 0.6, 1, 6.8),
+        ("lead_van_0", "van", 1.2, 2, 10.0),
+        ("lead_bus_0", "bus", 1.8, 0, 8.8),
+        ("lead_car_1", "car", 2.3, 1, 9.2),
+    ]
+    for vid, kind, depart, lane, speed in lead_specs:
+        lines.append(
+            f'  <vehicle id="{vid}" type="{kind}" route="corridor" depart="{depart}" '
+            f'departLane="{lane}" departSpeed="{speed}"/>'
+        )
+
     ego_id = f"ego_{bus_id.replace('-', '_')}"
     lines.append(
-        f'  <vehicle id="{ego_id}" type="bus" route="corridor" depart="0" '
-        f'departLane="1" departSpeed="9.0"><param key="prayaan" value="ego"/></vehicle>'
+        f'  <vehicle id="{ego_id}" type="bus" route="corridor" depart="3.0" '
+        f'departLane="1" departSpeed="11.0"><param key="prayaan" value="ego"/></vehicle>'
     )
 
     kinds = ["car", "bike", "auto", "car", "van", "bike", "truck", "car", "auto", "bus"]
-    for i in range(64):
-        kind = rng.choice(kinds)
-        depart = round(0.6 + i * rng.uniform(0.72, 1.12), 1)
-        lane = rng.randrange(3)
-        speed = round(rng.uniform(5.5, 13.5), 1)
+    departures = []
+    t = 3.35
+    for i in range(72):
+        t += rng.uniform(0.42, 0.88)
+        departures.append((t, i, rng.choice(kinds), rng.randrange(3), rng.uniform(5.5, 13.5)))
+    for depart, i, kind, lane, speed in departures:
         lines.append(
-            f'  <vehicle id="{kind}_{i}" type="{kind}" route="corridor" depart="{depart}" '
-            f'departLane="{lane}" departSpeed="{speed}"/>'
+            f'  <vehicle id="{kind}_{i}" type="{kind}" route="corridor" depart="{depart:.2f}" '
+            f'departLane="{lane}" departSpeed="{speed:.1f}"/>'
         )
     lines.append("</routes>")
     routes.write_text("\n".join(lines), encoding="utf-8")
@@ -110,7 +130,7 @@ def _write_scenario(root: Path, bus_id: str, seed: int) -> tuple[Path, str]:
     cfg.write_text(
         "<configuration>\n"
         "  <input><net-file value=\"micro.net.xml\"/><route-files value=\"micro.rou.xml\"/></input>\n"
-        "  <time><begin value=\"0\"/><end value=\"70\"/><step-length value=\"0.25\"/></time>\n"
+        "  <time><begin value=\"0\"/><end value=\"80\"/><step-length value=\"0.25\"/></time>\n"
         "  <processing><time-to-teleport value=\"-1\"/></processing>\n"
         "</configuration>\n",
         encoding="utf-8",
@@ -150,7 +170,7 @@ def generate_bus_twin(bus_id: str) -> dict:
                 label=label,
             )
             conn = traci.getConnection(label)
-            for step in range(280):
+            for step in range(320):
                 conn.simulationStep()
                 if step % 2:
                     continue
@@ -158,6 +178,8 @@ def generate_bus_twin(bus_id: str) -> dict:
                 for vid in conn.vehicle.getIDList():
                     try:
                         kind = conn.vehicle.getTypeID(vid)
+                        if kind == "slowTruck":
+                            kind = "truck"
                         x, y = conn.vehicle.getPosition(vid)
                         speed = conn.vehicle.getSpeed(vid)
                         angle = conn.vehicle.getAngle(vid)
@@ -175,8 +197,15 @@ def generate_bus_twin(bus_id: str) -> dict:
                     except Exception:
                         pass
                 ego = next((v for v in vehicles if v["ego"]), None)
-                local = vehicles if not ego else [v for v in vehicles if abs(v["x"] - ego["x"]) <= 95]
-                frames.append({"t": round(step * 0.25, 2), "vehicles": local, "ego": ego})
+                local = vehicles if not ego else [v for v in vehicles if abs(v["x"] - ego["x"]) <= 105]
+                stopped = sum(1 for v in local if v["speed"] < 0.5)
+                frames.append({
+                    "t": round(step * 0.25, 2),
+                    "vehicles": local,
+                    "ego": ego,
+                    "local_density": len(local),
+                    "stopped_vehicles": stopped,
+                })
             conn.close()
         except Exception as exc:
             try:
@@ -192,7 +221,7 @@ def generate_bus_twin(bus_id: str) -> dict:
         "available": True,
         "bus_id": bus_id,
         "engine": "SUMO",
-        "physics": {"car_following": "IDM", "lane_change": "SUMO lane-change model"},
+        "physics": {"car_following": "IDM", "lane_change": "LC2013"},
         "seed": seed % 100000,
         "step_seconds": 0.5,
         "road_length_m": 660,
@@ -203,5 +232,6 @@ def generate_bus_twin(bus_id: str) -> dict:
             "vehicle_types": kinds_seen,
             "mean_speed_kmh": round(mean_speed * 3.6, 1),
             "source": "LIVE SUMO TRAJECTORIES",
+            "scenario": "mixed traffic with slow-moving lead traffic and seeded lane-change pressure",
         },
     }
