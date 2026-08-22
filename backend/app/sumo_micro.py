@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import math
 import os
 import random
 import shutil
@@ -24,10 +23,12 @@ def _binary(name: str) -> str | None:
 
 
 def status() -> dict:
+    sumo = _binary("sumo")
+    netconvert = _binary("netconvert")
     return {
-        "sumo": bool(_binary("sumo")),
-        "netconvert": bool(_binary("netconvert")),
-        "engine": "SUMO microscopic traffic" if _binary("sumo") else "unavailable",
+        "sumo": bool(sumo),
+        "netconvert": bool(netconvert),
+        "engine": "SUMO microscopic traffic" if sumo and netconvert else "unavailable",
     }
 
 
@@ -43,20 +44,20 @@ def _write_scenario(root: Path, bus_id: str, seed: int) -> tuple[Path, str]:
     cfg = root / "micro.sumocfg"
 
     nodes.write_text(
-        """<nodes>\n"
+        "<nodes>\n"
         "  <node id=\"n0\" x=\"0\" y=\"0\" type=\"priority\"/>\n"
         "  <node id=\"n1\" x=\"220\" y=\"0\" type=\"priority\"/>\n"
         "  <node id=\"n2\" x=\"440\" y=\"0\" type=\"priority\"/>\n"
         "  <node id=\"n3\" x=\"660\" y=\"0\" type=\"priority\"/>\n"
-        "</nodes>\n""",
+        "</nodes>\n",
         encoding="utf-8",
     )
     edges.write_text(
-        """<edges>\n"
+        "<edges>\n"
         "  <edge id=\"e0\" from=\"n0\" to=\"n1\" numLanes=\"3\" speed=\"16.7\"/>\n"
         "  <edge id=\"e1\" from=\"n1\" to=\"n2\" numLanes=\"3\" speed=\"13.9\"/>\n"
         "  <edge id=\"e2\" from=\"n2\" to=\"n3\" numLanes=\"3\" speed=\"16.7\"/>\n"
-        "</edges>\n""",
+        "</edges>\n",
         encoding="utf-8",
     )
 
@@ -77,8 +78,9 @@ def _write_scenario(root: Path, bus_id: str, seed: int) -> tuple[Path, str]:
             f'lcStrategic="1.0" lcCooperative="0.7" lcSpeedGain="1.0" lcKeepRight="0.6"/>'
         )
     lines.append('  <route id="corridor" edges="e0 e1 e2"/>')
+    ego_id = f"ego_{bus_id.replace('-', '_')}"
     lines.append(
-        f'  <vehicle id="ego_{bus_id.replace("-", "_")}" type="bus" route="corridor" depart="0" '
+        f'  <vehicle id="{ego_id}" type="bus" route="corridor" depart="0" '
         f'departLane="1" departSpeed="9.0"><param key="prayaan" value="ego"/></vehicle>'
     )
 
@@ -106,14 +108,14 @@ def _write_scenario(root: Path, bus_id: str, seed: int) -> tuple[Path, str]:
         timeout=30,
     )
     cfg.write_text(
-        """<configuration>\n"
+        "<configuration>\n"
         "  <input><net-file value=\"micro.net.xml\"/><route-files value=\"micro.rou.xml\"/></input>\n"
         "  <time><begin value=\"0\"/><end value=\"70\"/><step-length value=\"0.25\"/></time>\n"
         "  <processing><time-to-teleport value=\"-1\"/></processing>\n"
-        "</configuration>\n""",
+        "</configuration>\n",
         encoding="utf-8",
     )
-    return cfg, f"ego_{bus_id.replace('-', '_')}"
+    return cfg, ego_id
 
 
 @lru_cache(maxsize=32)
@@ -142,7 +144,6 @@ def generate_bus_twin(bus_id: str) -> dict:
 
         label = f"prayaan_{seed}_{os.getpid()}"
         frames: list[dict] = []
-        vehicle_kinds: dict[str, str] = {}
         try:
             traci.start(
                 [sumo, "-c", str(cfg), "--seed", str(seed % 100000), "--no-step-log", "true", "--duration-log.disable", "true"],
@@ -157,7 +158,6 @@ def generate_bus_twin(bus_id: str) -> dict:
                 for vid in conn.vehicle.getIDList():
                     try:
                         kind = conn.vehicle.getTypeID(vid)
-                        vehicle_kinds[vid] = kind
                         x, y = conn.vehicle.getPosition(vid)
                         speed = conn.vehicle.getSpeed(vid)
                         angle = conn.vehicle.getAngle(vid)
@@ -175,9 +175,7 @@ def generate_bus_twin(bus_id: str) -> dict:
                     except Exception:
                         pass
                 ego = next((v for v in vehicles if v["ego"]), None)
-                local = vehicles
-                if ego:
-                    local = [v for v in vehicles if abs(v["x"] - ego["x"]) <= 95]
+                local = vehicles if not ego else [v for v in vehicles if abs(v["x"] - ego["x"]) <= 95]
                 frames.append({"t": round(step * 0.25, 2), "vehicles": local, "ego": ego})
             conn.close()
         except Exception as exc:
@@ -194,7 +192,7 @@ def generate_bus_twin(bus_id: str) -> dict:
         "available": True,
         "bus_id": bus_id,
         "engine": "SUMO",
-        "physics": {"car_following": "IDM", "lane_change": "SUMO LC2013/default lane-change dynamics"},
+        "physics": {"car_following": "IDM", "lane_change": "SUMO lane-change model"},
         "seed": seed % 100000,
         "step_seconds": 0.5,
         "road_length_m": 660,
