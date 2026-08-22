@@ -3,8 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .simulation import simulation
+from .sumo_micro import generate_bus_twin, status as sumo_status
 
-app = FastAPI(title="PRAYAAN V2 Urban Intelligence API", version="2.1.0")
+app = FastAPI(title="PRAYAAN V2 Urban Intelligence API", version="2.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,6 +29,7 @@ def health():
         "input_provenance": "SIMULATED_FLEET",
         "pipeline": "LIVE_SOFTWARE",
         "seed": simulation.seed,
+        "sumo": sumo_status(),
     }
 
 
@@ -50,6 +52,16 @@ def reset():
 @app.get("/api/v2/assets/{asset_id}/history")
 def asset_history(asset_id: str):
     return simulation.asset_history(asset_id)
+
+
+@app.get("/api/v2/sumo/status")
+def get_sumo_status():
+    return sumo_status()
+
+
+@app.get("/api/v2/sumo/bus/{bus_id}")
+def bus_micro_twin(bus_id: str):
+    return generate_bus_twin(bus_id)
 
 
 @app.get("/api/v2/explain/{asset_id}")
