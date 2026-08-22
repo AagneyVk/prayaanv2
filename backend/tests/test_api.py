@@ -14,6 +14,7 @@ def test_health_reports_provenance():
     assert payload['status'] == 'ok'
     assert payload['input_provenance'] == 'SIMULATED_FLEET'
     assert payload['pipeline'] == 'LIVE_SOFTWARE'
+    assert 'sumo' in payload
 
 
 def test_state_has_live_fleet_and_corridors():
@@ -39,7 +40,6 @@ def test_simulation_is_reproducible_after_reset():
 
 def test_cross_bus_confirmation_requires_unique_buses():
     sim = UrbanSimulation(seed=42)
-    # Run long enough for deterministic routes to encounter event sites repeatedly.
     for _ in range(450):
         state = sim.step(1.0)
     confirmed = [e for e in state['events'] if e['status'] == 'CONFIRMED']
@@ -55,3 +55,24 @@ def test_what_if_is_explicitly_decision_support():
     assert payload['source'] == 'DETERMINISTIC WHAT-IF MODEL'
     assert payload['same_initial_state'] is True
     assert 'disclaimer' in payload
+
+
+def test_sumo_micro_twin_produces_traci_coordinates():
+    status = client.get('/api/v2/sumo/status').json()
+    assert status['sumo'] is True
+    assert status['netconvert'] is True
+
+    response = client.get('/api/v2/sumo/bus/MTC-021')
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['available'] is True, payload.get('reason')
+    assert payload['engine'] == 'SUMO'
+    assert payload['physics']['car_following'] == 'IDM'
+    assert payload['physics']['lane_change'] == 'LC2013'
+    assert len(payload['frames']) > 40
+    vehicles = [v for frame in payload['frames'] for v in frame['vehicles']]
+    assert vehicles
+    assert any(v['ego'] for v in vehicles)
+    assert any(v['kind'] == 'bike' for v in vehicles)
+    assert any(v['kind'] == 'truck' for v in vehicles)
+    assert all('x' in v and 'speed' in v and 'lane' in v for v in vehicles[:20])
