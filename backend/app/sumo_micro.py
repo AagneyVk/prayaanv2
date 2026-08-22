@@ -96,6 +96,7 @@ def _write_scenario(root: Path, bus_id: str, seed: int) -> tuple[Path, str]:
         ("van", 5.2, 2.0, 2.0, 4.0, "delivery", 15.0),
         ("slowTruck", 10.5, 2.5, 0.9, 2.8, "truck", 7.5),
     ]
+    max_speeds = {name: max_speed for name, _, _, _, _, _, max_speed in vtypes}
     lines = ["<routes>"]
     for name, length, width, accel, decel, vclass, max_speed in vtypes:
         lines.append(
@@ -116,15 +117,17 @@ def _write_scenario(root: Path, bus_id: str, seed: int) -> tuple[Path, str]:
         ("lead_car_1", "car", 2.3, 1, 9.2),
     ]
     for vid, kind, depart, lane, speed in lead_specs:
+        safe_speed = min(speed, max_speeds[kind] * 0.95)
         lines.append(
             f'  <vehicle id="{vid}" type="{kind}" route="corridor" depart="{depart}" '
-            f'departLane="{lane}" departSpeed="{speed}"/>'
+            f'departLane="{lane}" departSpeed="{safe_speed:.1f}"/>'
         )
 
     ego_id = f"ego_{bus_id.replace('-', '_')}"
+    ego_speed = min(11.0, max_speeds["bus"] * 0.95)
     lines.append(
         f'  <vehicle id="{ego_id}" type="bus" route="corridor" depart="3.0" '
-        f'departLane="1" departSpeed="11.0"><param key="prayaan" value="ego"/></vehicle>'
+        f'departLane="1" departSpeed="{ego_speed:.1f}"><param key="prayaan" value="ego"/></vehicle>'
     )
 
     kinds = ["car", "bike", "auto", "car", "van", "bike", "truck", "car", "auto", "bus"]
@@ -133,7 +136,9 @@ def _write_scenario(root: Path, bus_id: str, seed: int) -> tuple[Path, str]:
         t += rng.uniform(0.42, 0.88)
         kind = rng.choice(kinds)
         lane = rng.randrange(3)
-        speed = rng.uniform(5.5, 13.5)
+        speed_ceiling = min(13.5, max_speeds[kind] * 0.90)
+        speed_floor = min(5.5, speed_ceiling * 0.70)
+        speed = rng.uniform(speed_floor, speed_ceiling)
         lines.append(
             f'  <vehicle id="{kind}_{i}" type="{kind}" route="corridor" depart="{t:.2f}" '
             f'departLane="{lane}" departSpeed="{speed:.1f}"/>'
@@ -180,7 +185,6 @@ def _parse_fcd(fcd_path: Path, ego_id: str) -> list[dict]:
         if elem.tag != "timestep":
             continue
         t = float(elem.attrib.get("time", "0"))
-        # Keep every 0.5 s frame although SUMO itself advances at 0.25 s.
         if round((t * 100) % 50, 6) != 0:
             elem.clear()
             continue
