@@ -3,8 +3,9 @@ import { MapContainer, TileLayer, CircleMarker, Polyline, Tooltip, useMap } from
 import {
   Activity, AlertTriangle, BusFront, Camera, CheckCircle2, ChevronRight, Clock3,
   Cpu, Crosshair, Gauge, Layers3, MapPinned, Radio, Route, ScanLine, ShieldCheck,
-  Sparkles, TimerReset, TrafficCone, Video, Wifi, X, Zap
+  Sparkles, TimerReset, TrafficCone, Video, Wifi, X, Zap, Orbit, Play
 } from 'lucide-react'
+import BusMicroTwin from './BusMicroTwin.jsx'
 
 const API = '/api/v2'
 const CHENNAI = [13.045, 80.235]
@@ -74,6 +75,7 @@ function App() {
   const [explanation, setExplanation] = useState(null)
   const [whatIf, setWhatIf] = useState(null)
   const [tickSpeed, setTickSpeed] = useState(1400)
+  const [microTwinBus, setMicroTwinBus] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -245,6 +247,10 @@ function App() {
             <div><Gauge/><span>Speed</span><b>{selectedBus.speed_kmh} km/h</b></div><div><Cpu/><span>Edge inference</span><b>{selectedBus.edge_fps} FPS</b></div><div><Wifi/><span>Event uplink</span><b>{selectedBus.uplink_kbps} KB/s</b></div><div><Video/><span>Raw video cloud</span><b>OFF</b></div>
           </div>
           <div className="camera-grid"><LiveCameraTile label="FRONT CAMERA" variant={0}/><LiveCameraTile label="LEFT CAMERA" variant={1}/><LiveCameraTile label="RIGHT CAMERA" variant={2}/><LiveCameraTile label="REAR CAMERA" variant={3}/></div>
+          <div className="micro-launch-card">
+            <div><Orbit size={20}/><div><span>MICROSCOPIC TRAFFIC PHYSICS</span><b>Open this bus inside SUMO</b><small>IDM following · lane changes · mixed traffic · real TraCI coordinates</small></div></div>
+            <button onClick={() => setMicroTwinBus(selectedBus)}><Play size={15}/> OPEN MICRO TWIN</button>
+          </div>
           <div className="edge-foot"><ShieldCheck size={17}/><div><b>Privacy-preserving edge mode</b><span>Camera imagery is represented as simulated onboard inference. Only compact events, confidence, GPS and timestamps are sent to the command system.</span></div></div>
         </div>
       )}
@@ -274,9 +280,11 @@ function App() {
           <div className="drawer-head"><div><span className="eyebrow">SIDE MODULE · DECISION SUPPORT</span><h2>Mobility Digital Twin</h2></div><button onClick={() => setActiveView('city')}><X/></button></div>
           <p className="drawer-intro">Traffic is not the core product. PRAYAAN uses fleet-observed speed and density as a side intelligence layer to identify congestion propagation and test corridor interventions.</p>
           <div className="mobility-grid">{corridors.map(c => <button key={c.id} onClick={() => runWhatIf(c)} className="mobility-card"><div><TrafficCone/><b>{c.name}</b></div><strong>{c.observed_speed} km/h</strong><span>Normal {c.normal_speed} · Delay +{c.estimated_delay_min} min</span><div className="mobility-risk"><i style={{ width: `${Math.round(c.congestion_index*100)}%` }}/></div><small>{c.trend} · {Math.round(c.confidence*100)}% confidence</small></button>)}</div>
-          {whatIf?.available && <div className="whatif"><div className="whatif-head"><Crosshair/><div><span>WHAT-IF EXPERIMENT</span><b>{whatIf.corridor_name}</b></div><small>SAME INITIAL STATE</small></div><div className="compare"><div><span>NO ACTION</span><strong>{whatIf.baseline.mean_speed_kmh} km/h</strong><p>Delay +{whatIf.baseline.estimated_delay_min} min</p><b>Spillback: {whatIf.baseline.spillback_risk}</b></div><div className="intervention"><span>FLOW MITIGATION</span><strong>{whatIf.intervention.mean_speed_kmh} km/h</strong><p>Delay +{whatIf.intervention.estimated_delay_min} min</p><b>Spillback: {whatIf.intervention.spillback_risk}</b></div></div><p className="model-note">Current V2 uses a deterministic what-if model. The interface labels the source explicitly; a microscopic simulator can replace this model later without changing the command-center workflow.</p></div>}
+          {whatIf?.available && <div className="whatif"><div className="whatif-head"><Crosshair/><div><span>WHAT-IF EXPERIMENT</span><b>{whatIf.corridor_name}</b></div><small>SAME INITIAL STATE</small></div><div className="compare"><div><span>NO ACTION</span><strong>{whatIf.baseline.mean_speed_kmh} km/h</strong><p>Delay +{whatIf.baseline.estimated_delay_min} min</p><b>Spillback: {whatIf.baseline.spillback_risk}</b></div><div className="intervention"><span>FLOW MITIGATION</span><strong>{whatIf.intervention.mean_speed_kmh} km/h</strong><p>Delay +{whatIf.intervention.estimated_delay_min} min</p><b>Spillback: {whatIf.intervention.spillback_risk}</b></div></div><p className="model-note">Corridor what-if remains a decision-support model. For vehicle-level physics, open any bus and launch its SUMO Micro Twin.</p></div>}
         </div>
       )}
+
+      {microTwinBus && <BusMicroTwin bus={microTwinBus} onClose={() => setMicroTwinBus(null)} />}
     </div>
   )
 }
