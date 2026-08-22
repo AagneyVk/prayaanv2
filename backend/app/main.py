@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from .simulation import simulation
 
-app = FastAPI(title="PRAYAAN V2 Urban Intelligence API", version="2.0.0")
+app = FastAPI(title="PRAYAAN V2 Urban Intelligence API", version="2.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,6 +27,7 @@ def health():
         "mode": "DEMONSTRATION",
         "input_provenance": "SIMULATED_FLEET",
         "pipeline": "LIVE_SOFTWARE",
+        "seed": simulation.seed,
     }
 
 
@@ -39,6 +40,16 @@ def state():
 def step(payload: StepRequest):
     seconds = max(0.1, min(payload.seconds, 10.0))
     return simulation.step(seconds)
+
+
+@app.post("/api/v2/reset")
+def reset():
+    return simulation.reset()
+
+
+@app.get("/api/v2/assets/{asset_id}/history")
+def asset_history(asset_id: str):
+    return simulation.asset_history(asset_id)
 
 
 @app.get("/api/v2/explain/{asset_id}")
@@ -55,8 +66,18 @@ def explain(asset_id: str):
     confidence = latest["fused_confidence"]
     persistence = latest["persistence_ticks"]
     observations = latest["observations"]
+    independent_buses = latest["independent_buses"]
     exposure_factor = 0.65 + min(observations, 5) * 0.06
-    priority = min(100.0, 100 * (0.45 * severity + 0.35 * confidence + 0.20 * exposure_factor))
+    consensus_factor = min(1.0, independent_buses / 3.0)
+    priority = min(
+        100.0,
+        100 * (
+            0.38 * severity
+            + 0.30 * confidence
+            + 0.17 * exposure_factor
+            + 0.15 * consensus_factor
+        ),
+    )
     return {
         "asset_id": asset_id,
         "available": True,
@@ -65,11 +86,14 @@ def explain(asset_id: str):
             "severity": severity,
             "fused_confidence": confidence,
             "observations": observations,
+            "independent_buses": independent_buses,
             "persistence_ticks": persistence,
             "exposure_factor": round(exposure_factor, 3),
+            "consensus_factor": round(consensus_factor, 3),
         },
-        "formula": "100 × (0.45·severity + 0.35·confidence + 0.20·exposure_factor)",
+        "formula": "100 × (0.38·severity + 0.30·fusion + 0.17·exposure + 0.15·cross_bus_consensus)",
         "recommendation": "PRIORITY REVIEW" if priority >= 75 else "MONITOR / SCHEDULE",
+        "explainability": "All terms are exposed to the operator; no black-box priority score is used in this prototype.",
     }
 
 
@@ -79,16 +103,25 @@ def mobility_what_if(corridor_id: str):
     corridor = next((c for c in state["corridors"] if c["id"] == corridor_id), None)
     if corridor is None:
         return {"available": False, "corridor_id": corridor_id}
+
     no_action_delay = corridor["estimated_delay_min"]
     mitigation_delay = max(0.0, no_action_delay * 0.58)
     no_action_speed = corridor["observed_speed"]
     mitigation_speed = min(corridor["normal_speed"], no_action_speed * 1.42)
+
     return {
         "available": True,
         "corridor_id": corridor_id,
         "corridor_name": corridor["name"],
         "source": "DETERMINISTIC WHAT-IF MODEL",
         "same_initial_state": True,
+        "observed_input": {
+            "speed_kmh": no_action_speed,
+            "congestion_index": corridor["congestion_index"],
+            "affected_length_km": corridor["affected_length_km"],
+            "propagation": corridor["propagation"],
+            "confidence": corridor["confidence"],
+        },
         "baseline": {
             "policy": "NO ACTION",
             "mean_speed_kmh": round(no_action_speed, 1),
@@ -101,4 +134,5 @@ def mobility_what_if(corridor_id: str):
             "estimated_delay_min": round(mitigation_delay, 1),
             "spillback_risk": "LOW" if mitigation_delay < 7 else "MEDIUM",
         },
+        "disclaimer": "Decision-support scenario only. The current V2 mobility module is not a live traffic-signal controller.",
     }
