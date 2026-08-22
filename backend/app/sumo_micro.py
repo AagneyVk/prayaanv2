@@ -25,10 +25,32 @@ def _binary(name: str) -> str | None:
 def status() -> dict:
     sumo = _binary("sumo")
     netconvert = _binary("netconvert")
+    try:
+        import traci
+        traci_ok = True
+        traci_path = getattr(traci, "__file__", None)
+    except Exception:
+        traci_ok = False
+        traci_path = None
+    try:
+        import sumolib
+        sumolib_ok = True
+        sumolib_path = getattr(sumolib, "__file__", None)
+    except Exception:
+        sumolib_ok = False
+        sumolib_path = None
+    ready = bool(sumo and netconvert and traci_ok and sumolib_ok)
     return {
         "sumo": bool(sumo),
         "netconvert": bool(netconvert),
-        "engine": "SUMO microscopic traffic" if sumo and netconvert else "unavailable",
+        "traci": traci_ok,
+        "sumolib": sumolib_ok,
+        "sumo_binary": sumo,
+        "netconvert_binary": netconvert,
+        "traci_path": traci_path,
+        "sumolib_path": sumolib_path,
+        "ready": ready,
+        "engine": "SUMO microscopic traffic" if ready else "incomplete",
     }
 
 
@@ -81,7 +103,6 @@ def _write_scenario(root: Path, bus_id: str, seed: int) -> tuple[Path, str]:
         )
     lines.append('  <route id="corridor" edges="e0 e1 e2"/>')
 
-    # Seed traffic ahead of the ego bus so the bus must react, brake and change lanes.
     lead_specs = [
         ("lead_car_0", "car", 0.0, 0, 10.5),
         ("lead_bike_0", "bike", 0.0, 2, 12.5),
@@ -104,14 +125,14 @@ def _write_scenario(root: Path, bus_id: str, seed: int) -> tuple[Path, str]:
     )
 
     kinds = ["car", "bike", "auto", "car", "van", "bike", "truck", "car", "auto", "bus"]
-    departures = []
     t = 3.35
     for i in range(72):
         t += rng.uniform(0.42, 0.88)
-        departures.append((t, i, rng.choice(kinds), rng.randrange(3), rng.uniform(5.5, 13.5)))
-    for depart, i, kind, lane, speed in departures:
+        kind = rng.choice(kinds)
+        lane = rng.randrange(3)
+        speed = rng.uniform(5.5, 13.5)
         lines.append(
-            f'  <vehicle id="{kind}_{i}" type="{kind}" route="corridor" depart="{depart:.2f}" '
+            f'  <vehicle id="{kind}_{i}" type="{kind}" route="corridor" depart="{t:.2f}" '
             f'departLane="{lane}" departSpeed="{speed:.1f}"/>'
         )
     lines.append("</routes>")
@@ -140,19 +161,25 @@ def _write_scenario(root: Path, bus_id: str, seed: int) -> tuple[Path, str]:
 
 @lru_cache(maxsize=32)
 def generate_bus_twin(bus_id: str) -> dict:
-    sumo = _binary("sumo")
-    if not sumo:
+    components = status()
+    if not components["sumo"] or not components["netconvert"]:
         return {
             "available": False,
             "bus_id": bus_id,
             "engine": "SUMO",
-            "reason": "SUMO runtime unavailable. Reinstall backend requirements.",
+            "reason": "SUMO runtime incomplete. Re-run backend dependency installation.",
+            "components": components,
+        }
+    if not components["traci"]:
+        return {
+            "available": False,
+            "bus_id": bus_id,
+            "engine": "SUMO",
+            "reason": "TraCI Python module unavailable. Install backend requirements (traci==1.27.1).",
+            "components": components,
         }
 
-    try:
-        import traci
-    except Exception as exc:
-        return {"available": False, "bus_id": bus_id, "engine": "SUMO", "reason": f"TraCI unavailable: {exc}"}
+    import traci
 
     seed = _seed(bus_id)
     with tempfile.TemporaryDirectory(prefix="prayaan_sumo_") as tmp:
@@ -160,13 +187,13 @@ def generate_bus_twin(bus_id: str) -> dict:
         try:
             cfg, ego_id = _write_scenario(root, bus_id, seed)
         except Exception as exc:
-            return {"available": False, "bus_id": bus_id, "engine": "SUMO", "reason": str(exc)}
+            return {"available": False, "bus_id": bus_id, "engine": "SUMO", "reason": str(exc), "components": components}
 
         label = f"prayaan_{seed}_{os.getpid()}"
         frames: list[dict] = []
         try:
             traci.start(
-                [sumo, "-c", str(cfg), "--seed", str(seed % 100000), "--no-step-log", "true", "--duration-log.disable", "true"],
+                [components["sumo_binary"], "-c", str(cfg), "--seed", str(seed % 100000), "--no-step-log", "true", "--duration-log.disable", "true"],
                 label=label,
             )
             conn = traci.getConnection(label)
@@ -212,7 +239,7 @@ def generate_bus_twin(bus_id: str) -> dict:
                 traci.getConnection(label).close()
             except Exception:
                 pass
-            return {"available": False, "bus_id": bus_id, "engine": "SUMO", "reason": f"SUMO run failed: {exc}"}
+            return {"available": False, "bus_id": bus_id, "engine": "SUMO", "reason": f"SUMO run failed: {exc}", "components": components}
 
     moving = [v for frame in frames for v in frame["vehicles"] if v.get("speed", 0) > 0.5]
     mean_speed = sum(v["speed"] for v in moving) / max(1, len(moving))
@@ -221,6 +248,7 @@ def generate_bus_twin(bus_id: str) -> dict:
         "available": True,
         "bus_id": bus_id,
         "engine": "SUMO",
+        "components": components,
         "physics": {"car_following": "IDM", "lane_change": "LC2013"},
         "seed": seed % 100000,
         "step_seconds": 0.5,
