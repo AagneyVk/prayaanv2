@@ -6,6 +6,7 @@ import random
 import shutil
 import subprocess
 import tempfile
+import xml.etree.ElementTree as ET
 from functools import lru_cache
 from pathlib import Path
 
@@ -39,7 +40,8 @@ def status() -> dict:
     except Exception:
         sumolib_ok = False
         sumolib_path = None
-    ready = bool(sumo and netconvert and traci_ok and sumolib_ok)
+
+    ready = bool(sumo and netconvert)
     return {
         "sumo": bool(sumo),
         "netconvert": bool(netconvert),
@@ -50,6 +52,7 @@ def status() -> dict:
         "traci_path": traci_path,
         "sumolib_path": sumolib_path,
         "ready": ready,
+        "transport": "SUMO FCD subprocess export",
         "engine": "SUMO microscopic traffic" if ready else "incomplete",
     }
 
@@ -141,13 +144,16 @@ def _write_scenario(root: Path, bus_id: str, seed: int) -> tuple[Path, str]:
     netconvert = _binary("netconvert")
     if not netconvert:
         raise RuntimeError("netconvert unavailable")
-    subprocess.run(
+    converted = subprocess.run(
         [netconvert, "--node-files", str(nodes), "--edge-files", str(edges), "--output-file", str(net), "--no-turnarounds", "true"],
-        check=True,
         capture_output=True,
         text=True,
         timeout=30,
     )
+    if converted.returncode != 0:
+        detail = (converted.stderr or converted.stdout or "unknown netconvert error").strip()
+        raise RuntimeError(f"netconvert failed: {detail}")
+
     cfg.write_text(
         "<configuration>\n"
         "  <input><net-file value=\"micro.net.xml\"/><route-files value=\"micro.rou.xml\"/></input>\n"
@@ -157,6 +163,56 @@ def _write_scenario(root: Path, bus_id: str, seed: int) -> tuple[Path, str]:
         encoding="utf-8",
     )
     return cfg, ego_id
+
+
+def _lane_index(lane_id: str | None) -> int:
+    if not lane_id:
+        return 1
+    try:
+        return int(lane_id.rsplit("_", 1)[1])
+    except Exception:
+        return 1
+
+
+def _parse_fcd(fcd_path: Path, ego_id: str) -> list[dict]:
+    frames: list[dict] = []
+    for _, elem in ET.iterparse(fcd_path, events=("end",)):
+        if elem.tag != "timestep":
+            continue
+        t = float(elem.attrib.get("time", "0"))
+        # Keep every 0.5 s frame although SUMO itself advances at 0.25 s.
+        if round((t * 100) % 50, 6) != 0:
+            elem.clear()
+            continue
+
+        vehicles = []
+        for node in elem.findall("vehicle"):
+            vid = node.attrib.get("id", "")
+            kind = node.attrib.get("type", "car")
+            if kind == "slowTruck":
+                kind = "truck"
+            vehicles.append({
+                "id": vid,
+                "kind": kind,
+                "x": round(float(node.attrib.get("x", "0")), 2),
+                "y": round(float(node.attrib.get("y", "0")), 2),
+                "speed": round(float(node.attrib.get("speed", "0")), 2),
+                "angle": round(float(node.attrib.get("angle", "90")), 1),
+                "lane": _lane_index(node.attrib.get("lane")),
+                "ego": vid == ego_id,
+            })
+
+        ego = next((v for v in vehicles if v["ego"]), None)
+        local = vehicles if not ego else [v for v in vehicles if abs(v["x"] - ego["x"]) <= 105]
+        frames.append({
+            "t": round(t, 2),
+            "vehicles": local,
+            "ego": ego,
+            "local_density": len(local),
+            "stopped_vehicles": sum(1 for v in local if v["speed"] < 0.5),
+        })
+        elem.clear()
+    return frames
 
 
 @lru_cache(maxsize=32)
@@ -170,16 +226,6 @@ def generate_bus_twin(bus_id: str) -> dict:
             "reason": "SUMO runtime incomplete. Re-run backend dependency installation.",
             "components": components,
         }
-    if not components["traci"]:
-        return {
-            "available": False,
-            "bus_id": bus_id,
-            "engine": "SUMO",
-            "reason": "TraCI Python module unavailable. Install backend requirements (traci==1.27.1).",
-            "components": components,
-        }
-
-    import traci
 
     seed = _seed(bus_id)
     with tempfile.TemporaryDirectory(prefix="prayaan_sumo_") as tmp:
@@ -189,57 +235,64 @@ def generate_bus_twin(bus_id: str) -> dict:
         except Exception as exc:
             return {"available": False, "bus_id": bus_id, "engine": "SUMO", "reason": str(exc), "components": components}
 
-        label = f"prayaan_{seed}_{os.getpid()}"
-        frames: list[dict] = []
+        fcd_path = root / "micro.fcd.xml"
+        command = [
+            components["sumo_binary"],
+            "-c", str(cfg),
+            "--seed", str(seed % 100000),
+            "--no-step-log", "true",
+            "--duration-log.disable", "true",
+            "--fcd-output", str(fcd_path),
+        ]
         try:
-            traci.start(
-                [components["sumo_binary"], "-c", str(cfg), "--seed", str(seed % 100000), "--no-step-log", "true", "--duration-log.disable", "true"],
-                label=label,
-            )
-            conn = traci.getConnection(label)
-            for step in range(320):
-                conn.simulationStep()
-                if step % 2:
-                    continue
-                vehicles = []
-                for vid in conn.vehicle.getIDList():
-                    try:
-                        kind = conn.vehicle.getTypeID(vid)
-                        if kind == "slowTruck":
-                            kind = "truck"
-                        x, y = conn.vehicle.getPosition(vid)
-                        speed = conn.vehicle.getSpeed(vid)
-                        angle = conn.vehicle.getAngle(vid)
-                        lane = conn.vehicle.getLaneIndex(vid)
-                        vehicles.append({
-                            "id": vid,
-                            "kind": kind,
-                            "x": round(x, 2),
-                            "y": round(y, 2),
-                            "speed": round(speed, 2),
-                            "angle": round(angle, 1),
-                            "lane": lane,
-                            "ego": vid == ego_id,
-                        })
-                    except Exception:
-                        pass
-                ego = next((v for v in vehicles if v["ego"]), None)
-                local = vehicles if not ego else [v for v in vehicles if abs(v["x"] - ego["x"]) <= 105]
-                stopped = sum(1 for v in local if v["speed"] < 0.5)
-                frames.append({
-                    "t": round(step * 0.25, 2),
-                    "vehicles": local,
-                    "ego": ego,
-                    "local_density": len(local),
-                    "stopped_vehicles": stopped,
-                })
-            conn.close()
+            run = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=45)
         except Exception as exc:
-            try:
-                traci.getConnection(label).close()
-            except Exception:
-                pass
-            return {"available": False, "bus_id": bus_id, "engine": "SUMO", "reason": f"SUMO run failed: {exc}", "components": components}
+            return {
+                "available": False,
+                "bus_id": bus_id,
+                "engine": "SUMO",
+                "reason": f"SUMO subprocess failed to launch: {exc}",
+                "components": components,
+            }
+
+        if run.returncode != 0:
+            detail = (run.stderr or run.stdout or "SUMO exited without diagnostic output").strip()
+            return {
+                "available": False,
+                "bus_id": bus_id,
+                "engine": "SUMO",
+                "reason": f"SUMO scenario failed: {detail}",
+                "components": components,
+                "command": command,
+            }
+        if not fcd_path.exists():
+            return {
+                "available": False,
+                "bus_id": bus_id,
+                "engine": "SUMO",
+                "reason": "SUMO completed but did not create the FCD trajectory file.",
+                "components": components,
+            }
+
+        try:
+            frames = _parse_fcd(fcd_path, ego_id)
+        except Exception as exc:
+            return {
+                "available": False,
+                "bus_id": bus_id,
+                "engine": "SUMO",
+                "reason": f"SUMO trajectory parse failed: {exc}",
+                "components": components,
+            }
+
+    if not frames:
+        return {
+            "available": False,
+            "bus_id": bus_id,
+            "engine": "SUMO",
+            "reason": "SUMO produced no trajectory frames.",
+            "components": components,
+        }
 
     moving = [v for frame in frames for v in frame["vehicles"] if v.get("speed", 0) > 0.5]
     mean_speed = sum(v["speed"] for v in moving) / max(1, len(moving))
@@ -259,7 +312,8 @@ def generate_bus_twin(bus_id: str) -> dict:
             "frames": len(frames),
             "vehicle_types": kinds_seen,
             "mean_speed_kmh": round(mean_speed * 3.6, 1),
-            "source": "LIVE SUMO TRAJECTORIES",
+            "source": "LIVE SUMO FCD TRAJECTORIES",
+            "transport": "subprocess export (no TraCI socket)",
             "scenario": "mixed traffic with slow-moving lead traffic and seeded lane-change pressure",
         },
     }
