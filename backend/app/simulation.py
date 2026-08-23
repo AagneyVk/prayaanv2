@@ -600,7 +600,7 @@ class UrbanSimulation:
         self.latest_events: List[dict] = []
         self.rejected_count = 0
         self.resolved_count = 0
-        self.road = RoadCondition(ROUTES, _haversine_m, _deterministic_uniform)
+        self.road = RoadCondition(ROUTES, _haversine_m, _deterministic_uniform, ROUTE_META)
         self._last_segment: Dict[str, str] = {}
         self._contractor_repairs: Dict[str, int] = {}
         self._wear: Dict[str, float] = {
@@ -1117,6 +1117,7 @@ class UrbanSimulation:
         return {
             "event_id": f"{cluster.cluster_id}-{self.tick}-{det.bus_id}",
             "asset_id": cluster.cluster_id,
+            "location": self.road.nearest_location(cluster.lat, cluster.lng),
             "type": meta["type"],
             "subtype": cluster.subtype,
             "title": meta["title"],
@@ -1407,7 +1408,7 @@ class UrbanSimulation:
         self.latest_events = []
         self.rejected_count = 0
         self.resolved_count = 0
-        self.road = RoadCondition(ROUTES, _haversine_m, _deterministic_uniform)
+        self.road = RoadCondition(ROUTES, _haversine_m, _deterministic_uniform, ROUTE_META)
         self._last_segment = {}
         self._contractor_repairs = {}
         self._wear = {

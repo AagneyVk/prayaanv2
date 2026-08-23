@@ -143,7 +143,16 @@ DEFECT_LIBRARY = [
     ("SCN-MANHOLE", "ROAD_HAZARD",    "MANHOLE_DAMAGE",       "CRITICAL", 0.92),
     ("SCN-WATER",   "ROAD_HAZARD",    "WATERLOGGING",         "MEDIUM",   0.74),
     ("SCN-DUMP",    "SANITATION",     "ILLEGAL_DUMPING",      "LOW",      0.58),
+    # Roadside, not on the carriageway: the ego bus sees a dark luminaire against
+    # a run of lit ones. That contrast is the whole detection — a single lamp
+    # photographed alone tells you nothing about whether it should be on.
+    ("SCN-LIGHT",   "INFRASTRUCTURE", "STREETLIGHT_OUTAGE",   "MEDIUM",   0.69),
 ]
+
+# Subtypes that live on the kerb rather than in a running lane. Their lane index
+# is not meaningful and consumers should place them at the roadside.
+ROADSIDE_SUBTYPES = {"STREETLIGHT_OUTAGE", "TRAFFIC_SIGNAL_FAULT", "DAMAGED_SIGNAGE"}
+ROADSIDE_OFFSET_M = 5.2       # kerb line to the centre of the nearest running lane
 
 EGO_SENSOR_RANGE_M = 60.0
 MIN_STANDOFF_M = 9.0     # closer than this and the defect is out of the camera frame
@@ -280,6 +289,7 @@ def _write_scenario(root: Path, bus_id: str, seed: int) -> tuple[Path, str, list
             "base_confidence": base_conf,
             "x": round(80.0 + span * (i + 0.5) / len(DEFECT_LIBRARY) + rng.uniform(-16, 16), 1),
             "lane": rng.randrange(3),
+            "roadside": subtype in ROADSIDE_SUBTYPES,
             "source": "SYNTHETIC ROADSIDE INPUT",
         })
     return cfg, ego_id, defects
@@ -339,6 +349,18 @@ def _parse_fcd(path: Path, ego_id: str) -> tuple[list[dict], dict]:
             "stopped_vehicles": sum(1 for v in local if v["speed"] < 0.5),
         })
         elem.clear()
+
+    # The replay is of ONE bus's mission, so it must begin when that bus enters
+    # the corridor and end when it leaves. Frames on either side have no ego at
+    # all, and every consumer that positions the world relative to the ego was
+    # falling back to chainage zero across them — so the scene snapped back to
+    # the start of the road and the whole thing read as a video scrubbing back
+    # and forth. Trimming to the ego's own window is what makes the playback a
+    # journey rather than a loop.
+    first = next((i for i, f in enumerate(frames) if f["ego"]), None)
+    if first is not None:
+        last = max(i for i, f in enumerate(frames) if f["ego"])
+        frames = frames[first:last + 1]
 
     return frames, tracks
 
@@ -490,7 +512,9 @@ def _defect_detections(defects: list[dict], ego_track: list[dict]) -> list[dict]
             dx = d["x"] - p["x"]
             if dx < MIN_STANDOFF_M:
                 continue                     # too close, or already passed
-            lateral = abs((d["lane"] - p["lane"]) * 3.2)
+            lateral = (ROADSIDE_OFFSET_M + abs(p["lane"] - 1) * 3.2
+                       if d.get("roadside")
+                       else abs((d["lane"] - p["lane"]) * 3.2))
             rng_m = math.hypot(dx, lateral)
             if rng_m > EGO_SENSOR_RANGE_M:
                 continue
@@ -510,7 +534,7 @@ def _defect_detections(defects: list[dict], ego_track: list[dict]) -> list[dict]
             "id": d["id"], "type": d["type"],
             "label": d["subtype"].replace("_", " "),
             "subtype": d["subtype"],
-            "x": d["x"], "lane": d["lane"], "t": p["t"],
+            "x": d["x"], "lane": d["lane"], "roadside": bool(d.get("roadside")), "t": p["t"],
             "severity": d["severity"], "confidence": round(conf, 3),
             "source": "SYNTHETIC ROADSIDE INPUT",
             "pipeline": "LIVE GEOMETRIC DETECTION",

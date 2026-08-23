@@ -72,38 +72,79 @@ function SceneSubject({ kind }) {
           <i key={i} style={{ opacity: o }} className={o < 0.4 ? 'worn' : ''} />
         ))}
       </div>
-      <div className="hazard-box zebra-box"><span>FADED CROSSING</span><b>0.81</b></div>
     </div>
   )
   if (kind === 'signal') return (
     <div className="signal-head dark">
       <i className="lamp red" /><i className="lamp amber" /><i className="lamp green" />
-      <div className="hazard-box signal-box"><span>SIGNAL DARK</span><b>0.87</b></div>
     </div>
   )
   if (kind === 'water') return (
     <div className="waterlog">
-      <div className="hazard-box water-box"><span>WATERLOGGING</span><b>0.84</b></div>
     </div>
   )
-  return <div className="hazard-box"><span>POTHOLE</span><b>0.89</b></div>
+  return <div className="pothole-mark" />
 }
 
-const CAMERA_SUBJECT = ['pothole', 'zebra', 'signal', 'water']
+// Which scene furniture to draw for a given detection class.
+const SUBJECT_FOR = {
+  POTHOLE: 'pothole', MANHOLE_DAMAGE: 'pothole', SURFACE_CRACK: 'pothole',
+  FADED_ZEBRA_CROSSING: 'zebra', FADED_MARKING: 'zebra',
+  TRAFFIC_SIGNAL_FAULT: 'signal', STREETLIGHT_OUTAGE: 'signal', DAMAGED_SIGNAGE: 'signal',
+  WATERLOGGING: 'water', ILLEGAL_DUMPING: 'water', PEDESTRIAN_RISK: 'signal',
+}
 
-function LiveCameraTile({ label, variant = 0, night = false }) {
+/**
+ * A camera tile now renders THIS bus's actual detections on THIS camera.
+ *
+ * Every number was hardcoded before — CAR 0.96, BIKE 0.91, POTHOLE 0.89 on every
+ * bus, every tick, forever. A judge who watched two buses side by side would see
+ * identical readouts and correctly conclude the panel was decoration. The
+ * confidences, ranges, bearings and frame rates below all come from the running
+ * simulation, so the four tiles disagree with each other and change as the bus
+ * moves — because they are reporting different cameras on a moving vehicle.
+ */
+function LiveCameraTile({ label, cameraKey, bus, detection, night = false }) {
+  const fps = bus?.edge_fps ?? 25
+  const sensing = detection?.sensing || {}
+  const conf = detection ? Math.round(detection.detector_confidence * 100) : null
+
   return (
-    <div className="camera-tile">
+    <div className={`camera-tile${detection ? ' has-detection' : ''}`}>
       <div className="camera-head">
         <span>{label}</span>
-        <span className="camera-live">● LIVE SIM {night ? '· IR' : ''}</span>
+        <span className="camera-live">● {night ? 'IR' : 'RGB'} · {fps} FPS</span>
       </div>
-      <div className={`camera-scene camera-scene-${variant}${night ? ' night' : ''}`}>
+      <div className={`camera-scene camera-scene-${cameraKey}${night ? ' night' : ''}`}>
         <div className="road-perspective" />
-        <div className="vehicle-box vehicle-a"><span>CAR</span><b>0.96</b></div>
-        {variant !== 2 && <div className="vehicle-box vehicle-b"><span>BIKE</span><b>0.91</b></div>}
-        <SceneSubject kind={CAMERA_SUBJECT[variant]} />
-        {variant === 2 && <div className="person-box"><span>PERSON</span><b>0.94</b></div>}
+
+        {/* Region of interest: the road surface the detector actually searches.
+            Drawn because "where is it even looking" is the first thing anyone
+            sensible asks about a perception system. */}
+        <div className="roi-box"><span>ROI · ROAD SURFACE</span></div>
+
+        {detection ? (
+          <>
+            <SceneSubject kind={SUBJECT_FOR[detection.subtype] || 'pothole'} />
+            <div className="det-box">
+              <span>{detection.subtype.replaceAll('_', ' ')}</span>
+              <b>{(detection.detector_confidence).toFixed(2)}</b>
+            </div>
+            <div className="det-readout">
+              <span>RANGE<b>{sensing.range_m ?? '—'} m</b></span>
+              <span>BEARING<b>{sensing.view_offset_deg ?? 0}°</b></span>
+              <span>P(DET)<b>{sensing.detection_probability ?? '—'}</b></span>
+              <span>LIGHT<b>{sensing.lighting_regime || '—'}</b></span>
+            </div>
+            <div className="det-conf"><i style={{ width: `${conf}%` }} /><em>{conf}%</em></div>
+          </>
+        ) : (
+          <div className="no-det">
+            <ScanLine size={15} />
+            <span>NO DETECTION THIS PASS</span>
+            <small>clear look logged as evidence of absence</small>
+          </div>
+        )}
         <ScanLine className="scanline-icon" size={18} />
       </div>
     </div>
@@ -323,7 +364,14 @@ function App() {
             </div>
 
             <div className="map-overlay-title"><span>LIVE CITY DIGITAL TWIN</span><b>FLEET SENSING COVERAGE</b></div>
-            <div className="map-legend"><span><i className="legend-bus"/>BUS NODE</span><span><i className="legend-event"/>EVENT</span><span><i className="legend-route"/>OBSERVED ROUTE</span></div>
+            <div className="map-legend">
+              <span><i className="legend-bus"/>BUS</span>
+              <span><i className="legend-major"/>MAJOR · IMPEDES VEHICLES</span>
+              <span><i className="legend-confirmed"/>CONFIRMED</span>
+              <span><i className="legend-candidate"/>CANDIDATE</span>
+              <span><i className="legend-resolved"/>REPAIRED</span>
+              <span><i className="legend-route"/>ROUTE</span>
+            </div>
             <div className="sim-control layer-control"><span>CLUTTER</span><button className={showRejected ? 'active' : ''} onClick={() => setShowRejected(v => !v)}>{showRejected ? 'SHOWN' : 'HIDDEN'}</button></div>
             <div className="sim-control"><span>SIM RATE</span><button className={tickSpeed === 1400 ? 'active' : ''} onClick={() => setTickSpeed(1400)}>1×</button><button className={tickSpeed === 650 ? 'active' : ''} onClick={() => setTickSpeed(650)}>2×</button></div>
           </div>
@@ -366,7 +414,15 @@ function App() {
           <div className="bus-meta-grid">
             <div><Gauge/><span>Speed</span><b>{selectedBus.speed_kmh} km/h</b></div><div><Cpu/><span>Edge inference</span><b>{selectedBus.edge_fps} FPS</b></div><div><Wifi/><span>Event uplink</span><b>{selectedBus.uplink_kbps} KB/s</b></div><div><Video/><span>Raw video cloud</span><b>OFF</b></div>
           </div>
-          <div className="camera-grid">{['FRONT CAMERA','LEFT CAMERA','RIGHT CAMERA','REAR CAMERA'].map((l,i)=>(<LiveCameraTile key={l} label={l} variant={i} night={(state?.lighting?.ambient ?? 1) < 0.35}/>))}</div>
+          <div className="camera-grid">{['front','left','right','rear'].map(cam=>(
+            <LiveCameraTile
+              key={cam}
+              label={`${cam.toUpperCase()} CAMERA`}
+              cameraKey={cam}
+              bus={selectedBus}
+              detection={events.find(e => e.bus_id === selectedBus.bus_id && e.camera === cam)}
+              night={(state?.lighting?.ambient ?? 1) < 0.35}
+            />))}</div>
           <div className="micro-launch-card">
             <div><Orbit size={20}/><div><span>MICROSCOPIC TRAFFIC PHYSICS</span><b>Open this bus inside SUMO</b><small>IDM following · lane changes · mixed traffic · real TraCI coordinates</small></div></div>
             <button onClick={() => setMicroTwinBus(selectedBus)}><Play size={15}/> OPEN MICRO TWIN</button>
@@ -458,7 +514,15 @@ function App() {
             <div className="section-heading"><div><span className="eyebrow">PREDICTIVE · RATE OF CHANGE</span><h2>Fastest degrading stretches</h2></div></div>
             {(state?.road_condition?.fastest_degrading||[]).slice(0,4).map(seg=>(
               <div className="degradation-row" key={seg.segment_id}>
-                <div><b>{seg.condition}</b><span>IRI {seg.estimated_iri} · {seg.passes} passes · {seg.independent_buses} bus{seg.independent_buses===1?'':'es'}</span></div>
+                <div className="seg-where">
+                  <b className={`cond-${(seg.condition||'').toLowerCase()}`}>{seg.condition}</b>
+                  <strong className="seg-place">{seg.landmarks || seg.location}</strong>
+                  <span>{seg.corridor}</span>
+                  <span className="seg-meta">
+                    {(seg.served_by||[]).map(r=><i className="route-chip" key={r}>{r}</i>)}
+                    IRI {seg.estimated_iri} · {seg.passes} passes · {seg.independent_buses} bus{seg.independent_buses===1?'':'es'}
+                  </span>
+                </div>
                 <strong>+{seg.degradation.iri_per_100_ticks}<small>/100 ticks</small></strong>
                 <em>{seg.degradation.forecast}</em>
                 <i style={{'--fit':`${Math.round(seg.degradation.fit_r2*100)}%`}}>fit r² {seg.degradation.fit_r2}</i>
@@ -474,14 +538,14 @@ function App() {
             {(state?.work_orders?.orders||[]).slice(0,6).map(o=>(
               <div className={`wo-row ${o.status.toLowerCase()}`} key={o.order_id}>
                 <div className="asset-code">{o.order_id}</div>
-                <div><b>{o.subtype.replaceAll('_',' ')}</b><span>raised t{o.raised_tick}{o.claimed_fixed_tick?` · claimed fixed t${o.claimed_fixed_tick}`:''}</span></div>
+                <div><b>{o.subtype.replaceAll('_',' ')}</b>{o.location && <span className="wo-place">{o.location}</span>}<span>raised t{o.raised_tick}{o.claimed_fixed_tick?` · claimed fixed t${o.claimed_fixed_tick}`:''}</span></div>
                 <strong>{o.status.replaceAll('_',' ')}</strong>
                 {o.evidence?.fleet_passes_since_claim && <em>{o.evidence.adjudication} · {o.evidence.fleet_passes_since_claim} passes{o.evidence.iri_improvement!=null?` · ΔIRI ${o.evidence.iri_improvement}`:''}</em>}
               </div>
             ))}
             <p className="panel-note">{state?.work_orders?.policy}</p>
           </section>
-          <div className="asset-list">{events.filter((e,i,a) => a.findIndex(x => x.asset_id === e.asset_id) === i).map(e => <button key={e.asset_id} onClick={() => openEvent(e)}><div className="asset-code">{e.asset_id}</div><div><b>{e.title}</b><span>{e.observations} observations · {e.status}</span></div><strong>{Math.round(e.fused_confidence*100)}%</strong></button>)}</div>
+          <div className="asset-list">{events.filter((e,i,a) => a.findIndex(x => x.asset_id === e.asset_id) === i).map(e => <button key={e.asset_id} onClick={() => openEvent(e)}><div className="asset-code">{e.asset_id}</div><div><b>{e.title}</b>{e.location && <span className="wo-place">{e.location}</span>}<span>{e.observations} observations · {e.status}</span></div><strong>{Math.round(e.fused_confidence*100)}%</strong></button>)}</div>
         </div>
       )}
 

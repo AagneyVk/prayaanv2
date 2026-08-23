@@ -62,6 +62,61 @@ function zebra(){
  }
  return g
 }
+function streetLamp(dir){
+ // dir is the side of the road the arm reaches over: the head must hang above
+ // the carriageway, which is what puts its pool of light on the road surface.
+ const g=new THREE.Group()
+ const pole=new THREE.Mesh(new THREE.CylinderGeometry(.08,.13,7.4,10),mat(0x26313c,.9))
+ pole.position.y=3.7;g.add(pole)
+ // A gentle outreach arm rather than a straight bracket — closer to the mast
+ // arms actually used on Indian arterials.
+ const arm=new THREE.Mesh(new THREE.TorusGeometry(1.5,.055,7,14,Math.PI/2),mat(0x26313c,.9))
+ arm.position.set(0,7.4,0);arm.rotation.set(Math.PI/2,0,dir>0?Math.PI:Math.PI/2)
+ arm.rotation.z=dir>0?0:Math.PI;g.add(arm)
+ const headX=dir*1.5
+ const housing=new THREE.Mesh(new THREE.BoxGeometry(.9,.22,.42),mat(0x323d49,.95))
+ housing.position.set(headX,8.82,0);g.add(housing)
+ // The lens is the only part that changes state. Everything else stays put, so
+ // an outage reads as a dark head on a standing pole — which is what a crew is
+ // actually dispatched to, not a missing pole.
+ const lens=new THREE.Mesh(new THREE.BoxGeometry(.78,.07,.34),
+   new THREE.MeshBasicMaterial({color:0xffd79a}))
+ lens.position.set(headX,8.68,0);g.add(lens)
+ // Sodium-vapour cone. Kept faint and additive so it lights the scene without
+ // washing out the road markings the speed cue depends on.
+ const cone=new THREE.Mesh(new THREE.ConeGeometry(3.6,8.5,20,1,true),
+   new THREE.MeshBasicMaterial({color:0xffcf87,transparent:true,opacity:.07,
+     side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending}))
+ cone.position.set(headX,4.4,0);g.add(cone)
+ // The pool on the tarmac is what actually sells a working lamp at night.
+ const pool=new THREE.Mesh(new THREE.CircleGeometry(4.4,28),
+   new THREE.MeshBasicMaterial({color:0xffc477,transparent:true,opacity:.1,
+     depthWrite:false,blending:THREE.AdditiveBlending}))
+ pool.rotation.x=-Math.PI/2;pool.position.set(headX,.12,0);g.add(pool)
+ g.userData.lens=lens;g.userData.cone=cone;g.userData.pool=pool;g.userData.lit=true
+ return g
+}
+function setLampLit(lamp,lit){
+ if(lamp.userData.lit===lit)return
+ lamp.userData.lit=lit
+ lamp.userData.lens.material.color.setHex(lit?0xffd79a:0x2a2c30)
+ lamp.userData.cone.material.opacity=lit?.07:0
+ lamp.userData.pool.material.opacity=lit?.1:0
+}
+function deadLamp(){
+ // The dark head itself, standing where the outage is. The streaming lamp rig
+ // already goes dark here; this adds the failed luminaire the crew is being
+ // sent to, so the beacon has a subject and the gap has a cause.
+ const g=new THREE.Group()
+ const pole=new THREE.Mesh(new THREE.CylinderGeometry(.08,.13,7.4,10),mat(0x1d252d,.95))
+ pole.position.y=3.7;g.add(pole)
+ const housing=new THREE.Mesh(new THREE.BoxGeometry(.9,.22,.42),mat(0x232b33,.95))
+ housing.position.set(0,8.82,0);g.add(housing)
+ const lens=new THREE.Mesh(new THREE.BoxGeometry(.78,.07,.34),
+   new THREE.MeshBasicMaterial({color:0x2a2c30}))
+ lens.position.set(0,8.68,0);g.add(lens)
+ return g
+}
 function signalHead(){const g=new THREE.Group();const post=new THREE.Mesh(new THREE.CylinderGeometry(.09,.12,5.4,10),mat(0x2b3742,.85));post.position.set(0,2.7,-6.6);g.add(post);const arm=new THREE.Mesh(new THREE.BoxGeometry(.12,.12,3.2),mat(0x2b3742,.85));arm.position.set(0,5.2,-5);g.add(arm);const box=new THREE.Mesh(new THREE.BoxGeometry(.5,1.5,.5),mat(0x11181f,.9));box.position.set(0,4.7,-3.5);g.add(box);
  // All three lamps unlit IS the detection — a working head would show one.
  for(const[i,c]of[[0,0x2a1416],[1,0x2a2413],[2,0x13261c]].entries()){const l=new THREE.Mesh(new THREE.SphereGeometry(.16,12,12),new THREE.MeshBasicMaterial({color:c[1]}));l.position.set(0,5.2-i*.45,-3.24);g.add(l)}return g}
@@ -85,7 +140,7 @@ function vehicleTracker(){
 function trackingHalo(){const g=new THREE.Group();const ring=new THREE.Mesh(new THREE.TorusGeometry(2.4,.08,10,48),new THREE.MeshBasicMaterial({color:0xff304e}));ring.rotation.x=Math.PI/2;ring.position.y=.15;g.add(ring);const box=new THREE.Mesh(new THREE.BoxGeometry(5.2,2.8,2.5),new THREE.MeshBasicMaterial({color:0xff304e,wireframe:true,transparent:true,opacity:.75}));box.position.y=1.45;g.add(box);g.userData.pulse=0;return g}
 
 export default function BusMicroTwin({bus,onClose}){
- const mountRef=useRef(null), sceneRef=useRef(null), cameraRef=useRef(null), meshes=useRef(new Map()), scenery=useRef([]), hazards=useRef(new Map()), beacons=useRef(new Map()), trackers=useRef(new Map()), triggered=useRef(new Set()), alertTimer=useRef(null), anomalyTimer=useRef(null)
+ const mountRef=useRef(null), sceneRef=useRef(null), cameraRef=useRef(null), meshes=useRef(new Map()), scenery=useRef([]), lamps=useRef([]), hazards=useRef(new Map()), beacons=useRef(new Map()), trackers=useRef(new Map()), triggered=useRef(new Set()), alertTimer=useRef(null), anomalyTimer=useRef(null)
  const [data,setData]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState(null),[playing,setPlaying]=useState(true),[frameIndex,setFrameIndex]=useState(0),[cameraMode,setCameraMode]=useState('chase'),[playbackRate,setPlaybackRate]=useState(1),[activeEvent,setActiveEvent]=useState(null),[eventLog,setEventLog]=useState([]),[analysisPhase,setAnalysisPhase]=useState(null),[rashTarget,setRashTarget]=useState(null),[trackedVehicle,setTrackedVehicle]=useState(null),[activeAnomaly,setActiveAnomaly]=useState(null)
  useEffect(()=>{let dead=false;setLoading(true);setError(null);fetch(`/api/v2/sumo/bus/${bus.bus_id}`).then(r=>r.json()).then(p=>{if(dead)return;if(!p.available)throw Error(p.reason||'SUMO unavailable');setData(p);setFrameIndex(0);setLoading(false)}).catch(e=>{if(!dead){setError(e.message);setLoading(false)}});return()=>{dead=true}},[bus.bus_id])
  useEffect(()=>{if(!data||!mountRef.current)return;const mount=mountRef.current,scene=new THREE.Scene();scene.background=new THREE.Color(0x05070a);scene.fog=new THREE.Fog(0x05070a,90,260);const cam=new THREE.PerspectiveCamera(52,mount.clientWidth/mount.clientHeight,.1,1000);const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(mount.clientWidth,mount.clientHeight);renderer.shadowMap.enabled=true;renderer.outputColorSpace=THREE.SRGBColorSpace;mount.appendChild(renderer.domElement);scene.add(new THREE.HemisphereLight(0x9fdcff,0x101018,1.55));const sun=new THREE.DirectionalLight(0xffffff,2.1);sun.position.set(-10,30,20);scene.add(sun)
@@ -96,13 +151,20 @@ export default function BusMicroTwin({bus,onClose}){
  for(const z of [-2.05,2.05])for(let x=-130;x<=130;x+=9){const d=new THREE.Mesh(new THREE.BoxGeometry(4.2,.03,.11),new THREE.MeshBasicMaterial({color:0xc9d0da}));d.position.set(x,.1,z);d.userData.x0=x;scene.add(d);scenery.current.push(d)}
  // Kerb edging: a continuous stipple at both road edges adds peripheral flow.
  for(const z of [-6.35,6.35])for(let x=-130;x<=130;x+=4){const k=new THREE.Mesh(new THREE.BoxGeometry(1.6,.05,.16),new THREE.MeshBasicMaterial({color:0x3b4653}));k.position.set(x,.09,z);k.userData.x0=x;scene.add(k);scenery.current.push(k)}
- for(let x=-130;x<=130;x+=20)for(const z of [-8.5,8.5]){const pole=new THREE.Mesh(new THREE.CylinderGeometry(.08,.11,5.5,10),mat(0x26313c,.85));pole.position.set(x,2.75,z);pole.userData.x0=x;scene.add(pole);scenery.current.push(pole)}
+ // Street lighting. These were bare poles before — nothing on top, nothing lit —
+ // which is why a streetlight outage had no way to show itself. Each one is now
+ // an actual luminaire that can be on or off, because the detection PRAYAAN
+ // claims here is contrast: one dark head in a run of lit ones. A single lamp
+ // photographed on its own tells you nothing about whether it ought to be on.
+ for(let x=-130;x<=130;x+=20)for(const z of [-8.5,8.5]){
+  const lamp=streetLamp(z>0?-1:1);lamp.position.set(x,0,z);lamp.userData.x0=x
+  scene.add(lamp);scenery.current.push(lamp);lamps.current.push(lamp)}
  // Roadside blocks at varied depth give parallax — near objects sweep past
  // faster than far ones, which is what actually sells forward motion.
  for(let i=0;i<26;i++){const z=(i%2?1:-1)*(13+(i*3.7)%16),h=4+((i*5.3)%11)
   const b=new THREE.Mesh(new THREE.BoxGeometry(6+((i*2.1)%7),h,5),mat(0x121820,.95))
   const x=-130+i*10.4;b.position.set(x,h/2,z);b.userData.x0=x;scene.add(b);scenery.current.push(b)}
- const SUBJECT={POTHOLE:pothole,WATERLOGGING:water,FADED_ZEBRA_CROSSING:zebra,TRAFFIC_SIGNAL_FAULT:signalHead,MANHOLE_DAMAGE:manhole,ILLEGAL_DUMPING:dumping}
+ const SUBJECT={POTHOLE:pothole,WATERLOGGING:water,FADED_ZEBRA_CROSSING:zebra,TRAFFIC_SIGNAL_FAULT:signalHead,MANHOLE_DAMAGE:manhole,ILLEGAL_DUMPING:dumping,STREETLIGHT_OUTAGE:deadLamp}
  for(const s of data.scenarios||[]){const make=SUBJECT[s.subtype];let h=make?make():null;if(h){scene.add(h);hazards.current.set(s.id,h)}if(s.type!=='DRIVING_ANOMALY'){const b=detectionBeacon(s.type==='ROAD_DEFECT'?0xffa52f:s.type==='SAFETY'?0xff8ac4:s.type==='SANITATION'?0x9ad36b:s.type==='INFRASTRUCTURE'?0xc9a5ff:0x34d9ff);b.visible=false;scene.add(b);beacons.current.set(s.id,b)}}
  sceneRef.current=scene;cameraRef.current=cam;let raf;const clock=new THREE.Clock();const render=()=>{const dt=clock.getDelta();meshes.current.forEach(m=>{
    m.position.lerp(m.userData.target,.2)
@@ -112,7 +174,7 @@ export default function BusMicroTwin({bus,onClose}){
    // angle, but it is what separates "vehicles sliding on a plane" from traffic.
    const target=-(m.userData.accel||0)*0.012
    m.rotation.z+=(target-m.rotation.z)*Math.min(1,dt*6)
-  });beacons.current.forEach(b=>{if(!b.visible)return;b.userData.pulse+=dt*3.2;b.children.forEach((c,i)=>{if(c.geometry?.type==='RingGeometry'){const s=1+((Math.sin(b.userData.pulse-i*.7)+1)*.16);c.scale.set(s,s,s);c.material.opacity=.35+.45*((Math.sin(b.userData.pulse-i*.8)+1)/2)}})});trackers.current.forEach(t=>{t.userData.pulse+=dt*4;t.scale.setScalar(1+Math.sin(t.userData.pulse)*.04)});renderer.render(scene,cam);raf=requestAnimationFrame(render)};render();const resize=()=>{cam.aspect=mount.clientWidth/mount.clientHeight;cam.updateProjectionMatrix();renderer.setSize(mount.clientWidth,mount.clientHeight)};addEventListener('resize',resize);return()=>{cancelAnimationFrame(raf);removeEventListener('resize',resize);if(alertTimer.current)clearTimeout(alertTimer.current);renderer.dispose();if(renderer.domElement.parentNode===mount)mount.removeChild(renderer.domElement);meshes.current.clear();scenery.current=[];hazards.current.clear();beacons.current.clear();trackers.current.clear()}},[data])
+  });beacons.current.forEach(b=>{if(!b.visible)return;b.userData.pulse+=dt*3.2;b.children.forEach((c,i)=>{if(c.geometry?.type==='RingGeometry'){const s=1+((Math.sin(b.userData.pulse-i*.7)+1)*.16);c.scale.set(s,s,s);c.material.opacity=.35+.45*((Math.sin(b.userData.pulse-i*.8)+1)/2)}})});trackers.current.forEach(t=>{t.userData.pulse+=dt*4;t.scale.setScalar(1+Math.sin(t.userData.pulse)*.04)});renderer.render(scene,cam);raf=requestAnimationFrame(render)};render();const resize=()=>{cam.aspect=mount.clientWidth/mount.clientHeight;cam.updateProjectionMatrix();renderer.setSize(mount.clientWidth,mount.clientHeight)};addEventListener('resize',resize);return()=>{cancelAnimationFrame(raf);removeEventListener('resize',resize);if(alertTimer.current)clearTimeout(alertTimer.current);renderer.dispose();if(renderer.domElement.parentNode===mount)mount.removeChild(renderer.domElement);meshes.current.clear();scenery.current=[];lamps.current=[];hazards.current.clear();beacons.current.clear();trackers.current.clear()}},[data])
  useEffect(()=>{if(!data?.frames?.length||!sceneRef.current)return;const f=data.frames[Math.min(frameIndex,data.frames.length-1)],ego=f.ego,egoX=ego?.x||0,active=new Set();const prevF=data.frames[Math.max(0,Math.min(frameIndex,data.frames.length-1)-1)]
  for(const v of f.vehicles){active.add(v.id);let m=meshes.current.get(v.id);if(!m){m=vehicle(v.kind,v.ego);meshes.current.set(v.id,m);sceneRef.current.add(m);m.position.set(v.x-egoX,.12,(v.lane-1)*4.1)}
   // Lateral position comes from the sublane model, so bikes genuinely sit
@@ -130,7 +192,25 @@ export default function BusMicroTwin({bus,onClose}){
  // corridor looked static no matter how fast the bus was going.
  const SPAN=260
  scenery.current.forEach(o=>{const x0=o.userData.x0??o.position.x;o.position.x=((x0-egoX)%SPAN+SPAN*1.5)%SPAN-SPAN/2})
- for(const s of data.scenarios||[]){const h=hazards.current.get(s.id);if(h)h.position.set(s.x-egoX,.1,(s.lane-1)*4.1);const b=beacons.current.get(s.id);if(b)b.position.set(s.x-egoX,.11,(s.lane-1)*4.1)}
+ // Roadside assets belong on the kerb, not in a running lane. Placing a
+ // streetlight or a signal head between the lane markings was the giveaway that
+ // the scene was decorative; a lane index means nothing for something bolted to
+ // the footpath.
+ const zOf=s=>s.roadside?(s.lane%2?-8.5:8.5):(s.lane-1)*4.1
+ for(const s of data.scenarios||[]){const h=hazards.current.get(s.id);if(h)h.position.set(s.x-egoX,.1,zOf(s));const b=beacons.current.get(s.id);if(b)b.position.set(s.x-egoX,.11,zOf(s))}
+
+ // ---- street lighting: one head out, the rest burning ----------------------
+ // The outage sits at a fixed chainage on the road, so the lamp that is dark is
+ // whichever one is standing there — not a lamp picked in advance. Because the
+ // lamp rig recycles as it streams past, this is re-evaluated every frame
+ // against world position. The result is what a driver actually sees: a run of
+ // lit heads with a single gap, and the gap holds still while the bus moves.
+ const outages=(data.scenarios||[]).filter(s=>s.subtype==='STREETLIGHT_OUTAGE')
+ for(const lamp of lamps.current){
+  const worldX=lamp.position.x+egoX
+  const dark=outages.some(o=>Math.abs(worldX-o.x)<11&&Math.sign(lamp.position.z)===Math.sign(zOf(o)||1))
+  setLampLit(lamp,!dark)
+ }
 
  // ---- moving anomalies: lock the rig onto the ACTUAL vehicle ---------------
  // The vehicle id came back from the trajectory analytics, and that id is in the

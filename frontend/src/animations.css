@@ -376,3 +376,180 @@
 .bottom-strip {
   grid-template-columns: 145px repeat(auto-fit, minmax(170px, 1fr)) !important;
 }
+
+/* Legend mirrors the map's impact colours exactly. A legend that drifts from the
+   thing it explains is worse than no legend. */
+.legend-major     { width: 9px; height: 9px; border-radius: 50%; background: #ff3348; box-shadow: 0 0 7px rgba(255,51,72,.8); }
+.legend-confirmed { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; }
+.legend-candidate { width: 7px; height: 7px; border-radius: 50%; background: #8a6222; border: 1px solid #c98f3e; }
+.legend-resolved  { width: 8px; height: 8px; border-radius: 50%; background: #0f6b52; border: 1px solid #34d399; }
+.map-legend { flex-wrap: wrap; max-width: 60%; row-gap: 5px; }
+
+/* ---- camera tiles: real detections, real geometry ------------------------ */
+
+.camera-tile { transition: border-color .4s ease, box-shadow .4s ease; }
+.camera-tile.has-detection { border-color: rgba(251,181,71,.5); box-shadow: 0 0 22px rgba(251,181,71,.09); }
+
+/* The region of interest the detector actually searches — a perspective
+   trapezoid over the road surface, matching the backend's ROI model. */
+.roi-box {
+  position: absolute; left: 18%; right: 18%; bottom: 4%; height: 62%;
+  border: 1px dashed rgba(120,160,190,.28);
+  clip-path: polygon(34% 0, 66% 0, 100% 100%, 0 100%);
+  pointer-events: none;
+}
+.roi-box span {
+  position: absolute; left: 50%; top: 3px; transform: translateX(-50%);
+  font-size: 6px; letter-spacing: .14em; color: rgba(150,185,210,.5);
+}
+
+/* Detection box carries the class and the model's own confidence. */
+.det-box {
+  position: absolute; left: 34%; top: 44%;
+  min-width: 92px; padding: 3px 5px;
+  border: 1px solid #ffb547; color: #ffd9a0;
+  background: rgba(60,42,12,.35);
+  font-size: 7px; letter-spacing: .06em;
+  animation: detLock .35s ease-out both;
+}
+.det-box b { display: block; margin-top: 2px; font-size: 11px; color: #fff; font-variant-numeric: tabular-nums; }
+@keyframes detLock { from { opacity: 0; transform: scale(1.08); } to { opacity: 1; transform: none; } }
+
+/* Sensing geometry, straight from the payload. These four numbers are what
+   makes the confidence defensible rather than decorative. */
+.det-readout {
+  position: absolute; left: 6px; bottom: 6px; right: 6px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+}
+.det-readout span {
+  padding: 4px 5px; background: rgba(4,10,18,.72);
+  border: 1px solid rgba(120,160,190,.16);
+  font-size: 5.5px; letter-spacing: .1em; color: #7f9db4;
+}
+.det-readout b { display: block; margin-top: 2px; font-size: 9px; color: #dcecf7; font-variant-numeric: tabular-nums; }
+
+.det-conf {
+  position: absolute; right: 8px; top: 8px; width: 74px; height: 4px;
+  background: rgba(255,255,255,.1); border-radius: 3px;
+}
+.det-conf i { display: block; height: 100%; background: linear-gradient(90deg,#f59e0b,#ffd88a); border-radius: 3px; transition: width .5s ease; }
+.det-conf em { position: absolute; right: 0; top: 7px; font-style: normal; font-size: 7px; color: #ffd88a; }
+
+/* A clean look is evidence too — say so rather than showing an empty box. */
+.no-det {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px; color: #5d7a92;
+}
+.no-det svg { opacity: .5; }
+.no-det span { font-size: 8px; letter-spacing: .14em; }
+.no-det small { font-size: 6.5px; color: #46617a; letter-spacing: .06em; }
+
+/* The road-surface defect drawn as a shape, not a label. The measurement is
+   reported once, by the detection box, using the value the pipeline produced. */
+.pothole-mark {
+  position: absolute; left: 44%; top: 56%;
+  width: 46px; height: 17px; border-radius: 50%;
+  background: radial-gradient(ellipse at 45% 40%, #05070a 40%, #23282e 100%);
+  box-shadow: 0 0 0 1px rgba(120,80,50,.5), inset 0 2px 4px rgba(0,0,0,.9);
+}
+
+/* ---- naming the road ------------------------------------------------------
+   A segment key like "13.0418,80.2341|13.0475,80.2489" identifies a stretch to
+   the machine and tells a road engineer nothing. Every row that asks someone to
+   go and act on it now leads with the place, in the language a depot uses. */
+
+.seg-where{display:flex;flex-direction:column;gap:2px;min-width:0}
+.seg-where b{
+  align-self:flex-start;font-size:7px;letter-spacing:.13em;padding:2px 6px;
+  border-radius:3px;background:#12304a;color:#8fb6d2;
+}
+.seg-where b.cond-poor{background:#4a2c0c;color:#f0b357}
+.seg-where b.cond-critical{background:#4d1220;color:#ff8095}
+.seg-where b.cond-fair{background:#123a34;color:#63c9ac}
+.seg-where b.cond-good{background:#0f3326;color:#59c98d}
+
+/* The place name is the row's headline — bigger than the metrics beside it. */
+.seg-place{
+  display:block;margin-top:2px;font-size:12px;color:#e8f3fb;letter-spacing:.01em;
+  font-weight:600;line-height:1.25;
+}
+.seg-where>span{margin-top:1px}
+.seg-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:4px}
+.seg-meta .route-chip+.route-chip{margin-left:-2px}
+
+/* Which services drive this stretch. A shared arterial degrades faster and gets
+   re-measured more often — the chips make that visible without a sentence. */
+.route-chip{
+  font-style:normal;font-size:8px;letter-spacing:.06em;padding:2px 6px;
+  border:1px solid #2b5c85;border-radius:9px;color:#9cc6e4;background:#0d2438;
+  margin-right:4px;
+}
+.seg-meta{font-size:9px;color:#7c9bb2}
+.seg-where>span:not(.seg-meta){font-size:9px;color:#7f9db4}
+
+.wo-place{
+  display:block;margin-top:3px;font-size:9px;color:#a8c8de;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
+/* ---- camera tiles: make the feed legible ---------------------------------
+   The tiles were rendering as near-black rectangles — sky #0b1b2b over asphalt
+   #101923, which on a projector is indistinguishable from a dead panel. A judge
+   cannot assess a detection they cannot see. These lift the scene to something
+   that reads as a real low-light camera feed while keeping the night character:
+   the point is a dark road with a visible surface, not an unlit one. */
+
+.camera-scene {
+  background:
+    linear-gradient(180deg, #12293f 0%, #17334a 34%, #1b2b38 34%, #141d26 100%);
+}
+
+/* Asphalt with a real vanishing point, a lit centre line, and edge lines. The
+   perspective is what tells you where the detector is looking. */
+.road-perspective {
+  /* Flat asphalt, darker at the horizon. The old version painted a bright
+     vertical stripe down the middle to stand in for a centre line, but a
+     straight stripe inside a tapering trapezoid reads as a pole, not a road —
+     the marking has to narrow with the surface. It is drawn separately below. */
+  background: linear-gradient(180deg, #232d38 0%, #2f3a45 55%, #384450 100%);
+  box-shadow: inset 0 -40px 60px rgba(0,0,0,.4);
+}
+/* Centre line, tapering to the vanishing point like the surface it sits on. */
+.road-perspective::after {
+  content: "";
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 47.4%, rgba(226,236,244,.62) 47.4% 52.6%, transparent 52.6%);
+  clip-path: polygon(49.75% 0, 50.25% 0, 52.4% 100%, 47.6% 100%);
+  opacity: .8;
+}
+
+/* Headlight wash on the near road — the reason anything is visible at all at
+   night, and the thing that makes the ROI box read as illuminated. */
+.camera-scene::after {
+  content: "";
+  position: absolute; left: 50%; bottom: -14%;
+  width: 78%; height: 72%; transform: translateX(-50%);
+  background: radial-gradient(ellipse at 50% 100%,
+      rgba(215,232,245,.16) 0%, rgba(160,196,224,.07) 42%, transparent 72%);
+  clip-path: polygon(36% 0, 64% 0, 100% 100%, 0 100%);
+  pointer-events: none;
+}
+
+/* Horizon: separates sky from road so the tile has depth instead of reading as
+   one flat block. */
+.camera-scene::before {
+  content: "";
+  position: absolute; left: 0; right: 0; top: 34%;
+  width: 100%; height: 1px; bottom: auto;
+  background: linear-gradient(90deg, transparent, rgba(150,190,220,.4), transparent);
+  transform: none; box-shadow: none;
+}
+
+/* The ROI now sits on a surface bright enough to see it against. */
+.roi-box { border-color: rgba(150,195,225,.42); }
+.roi-box span { color: rgba(190,220,240,.75); }
+
+/* "No detection" is evidence, so it has to be readable rather than a grey
+   whisper on black. */
+.no-det { color: #93b4cb; }
+.no-det small { color: #6f91aa; }

@@ -14,25 +14,9 @@ import L from 'leaflet'
 const SENSOR_RANGE_M = 55
 const FRONT_FOV_DEG = 62
 
-// The asset lifecycle is the story this map tells, so each state gets a colour
-// that means something: red = the fleet stands behind it, amber = candidate,
-// blue = we think it was repaired, green = closed, grey = discarded clutter.
-const SITE_COLOURS = {
-  CONFIRMED:        { stroke: '#ff5d6c', fill: '#ff3348' },
-  UNVERIFIED:       { stroke: '#ffb547', fill: '#ffb547' },
-  REPAIR_SUSPECTED: { stroke: '#5db8ff', fill: '#2a7fd4' },
-  RESOLVED:         { stroke: '#34d399', fill: '#0f6b52' },
-  REJECTED:         { stroke: '#3b5065', fill: '#16222e' },
-  UNSEEN:           { stroke: '#41607a', fill: '#1d3346' },
-}
-
-const RADIUS = {
-  CONFIRMED: 9, UNVERIFIED: 6, REPAIR_SUSPECTED: 7, RESOLVED: 6, REJECTED: 3, UNSEEN: 4,
-}
-
-// A glyph per defect class. An operator scanning the map should be able to tell a
-// dark signal from a broken crossing without opening anything — colour alone
-// encodes lifecycle, so shape has to carry the type.
+// A glyph per defect class. Colour now carries operational impact, so shape has
+// to carry type — an operator must be able to tell a dark signal from a broken
+// crossing without opening anything.
 const TYPE_GLYPH = {
   POTHOLE: '\u25c9',
   SURFACE_CRACK: '\u2307',
@@ -45,6 +29,52 @@ const TYPE_GLYPH = {
   DAMAGED_SIGNAGE: '\u25c7',
   PEDESTRIAN_RISK: '\u25b3',
   ILLEGAL_DUMPING: '\u2612',
+}
+
+// Colour encodes OPERATIONAL IMPACT — "will this stop or damage a bus" — not
+// lifecycle. The system exists to keep the fleet moving, so red has to mean
+// "act now, this impedes driving". Colouring every confirmed asset red made a
+// faded crossing shout as loudly as a sunken manhole, and once everything is
+// urgent nothing is.
+//
+// Lifecycle is still visible, just carried by other channels: pulse for major,
+// dashes for discarded, size for confidence.
+const IMPACT_COLOURS = {
+  major:     { stroke: '#ff5d6c', fill: '#ff3348' },  // impedes or damages vehicles
+  confirmed: { stroke: '#ffb547', fill: '#f59e0b' },  // confirmed, not vehicle-impeding
+  candidate: { stroke: '#c98f3e', fill: '#8a6222' },  // awaiting a second bus
+  repair:    { stroke: '#5db8ff', fill: '#2a7fd4' },  // repair suspected
+  resolved:  { stroke: '#34d399', fill: '#0f6b52' },  // fleet-verified fixed
+  rejected:  { stroke: '#3b5065', fill: '#16222e' },  // discarded clutter
+}
+
+const RADIUS = {
+  major: 10, confirmed: 7, candidate: 5, repair: 7, resolved: 6, rejected: 3,
+}
+
+// How much each defect class actually impedes a vehicle. Mirrors the routing
+// weights deliberately: the map and the router must agree on what "major" means,
+// or an operator sees red on the map and NO_ACTION from the router.
+const BLOCKING_WEIGHT = {
+  MANHOLE_DAMAGE: 1.45,
+  WATERLOGGING: 1.35,
+  POTHOLE: 1.00,
+  SURFACE_CRACK: 0.45,
+}
+
+// Red requires all three: confirmed by independent buses, a class that actually
+// impedes driving, and enough severity to matter. A shallow pothole two buses
+// agree on is still amber.
+const MAJOR_THRESHOLD = 0.70
+
+function impactOf(site) {
+  if (site.status === 'RESOLVED') return 'resolved'
+  if (site.status === 'REJECTED') return 'rejected'
+  if (site.status === 'REPAIR_SUSPECTED') return 'repair'
+  if (site.status !== 'CONFIRMED') return 'candidate'
+  const w = BLOCKING_WEIGHT[site.subtype] || 0
+  const score = w * (site.severity ?? 0) * (site.fused_confidence ?? 0)
+  return score >= MAJOR_THRESHOLD ? 'major' : 'confirmed'
 }
 
 /** Bus icon that actually points where the bus is going. */
@@ -128,20 +158,23 @@ export default function LiveMap({
 
       {/* Known asset locations, coloured by consensus status. */}
       {visibleSites.map(site => {
-        const c = SITE_COLOURS[site.status] || SITE_COLOURS.UNSEEN
-        const confirmed = site.status === 'CONFIRMED'
+        const impact = impactOf(site)
+        const c = IMPACT_COLOURS[impact]
+        // Only a major fault pulses. Motion is the loudest signal on a map, so
+        // it is reserved for the thing that needs a crew today.
+        const major = impact === 'major'
         return (
           <CircleMarker
             key={site.id}
             center={[site.lat, site.lng]}
-            radius={RADIUS[site.status] ?? 5}
-            className={confirmed ? 'site-confirmed-pulse' : undefined}
+            radius={RADIUS[impact] ?? 5}
+            className={major ? 'site-confirmed-pulse' : undefined}
             pathOptions={{
               color: c.stroke,
               fillColor: c.fill,
-              fillOpacity: site.status === 'REJECTED' ? 0.2 : confirmed ? 0.8 : 0.6,
-              weight: confirmed ? 2.5 : 1.5,
-              dashArray: site.status === 'REJECTED' ? '2 4' : undefined,
+              fillOpacity: impact === 'rejected' ? 0.2 : major ? 0.85 : 0.6,
+              weight: major ? 2.6 : 1.5,
+              dashArray: impact === 'rejected' ? '2 4' : undefined,
             }}
             eventHandlers={{
               click: () => {
@@ -153,7 +186,7 @@ export default function LiveMap({
             <Tooltip direction="top">
               <b>{TYPE_GLYPH[site.subtype] || '\u25cf'} {site.id} · {site.subtype.replaceAll('_', ' ')}</b>
               <br />
-              {site.status} · {Math.round((site.fused_confidence ?? 0) * 100)}% fused
+              {impact === 'major' ? 'MAJOR · IMPEDES VEHICLES' : site.status} · {Math.round((site.fused_confidence ?? 0) * 100)}% fused
               <br />
               {site.observations} obs · {site.independent_buses} bus
               {site.independent_buses === 1 ? '' : 'es'} · {site.clean_passes} clean pass

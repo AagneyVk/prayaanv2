@@ -69,6 +69,12 @@ REPAIR_IRI_TARGET = 2.2       # what a proper resurfacing achieves
 SURFACE_AFFECTING = {"POTHOLE", "MANHOLE_DAMAGE", "SURFACE_CRACK", "WATERLOGGING"}
 VERIFY_MIN_PASSES = 3         # fleet passes needed to rule on a repair claim
 
+# The deployment did not begin the moment the control room was opened. These
+# reconstruct the passes the fleet already made, so a trend is a trend on the
+# first screen rather than after an hour of watching.
+HISTORY_PASSES = 5
+HISTORY_PASS_INTERVAL = 140   # ticks between one route's visits to a segment
+
 
 @dataclass
 class SegmentHealth:
@@ -81,6 +87,18 @@ class SegmentHealth:
     degradation_rate: float
     measurements: List[Tuple[int, float, str]] = field(default_factory=list)  # tick, iri, bus
     last_repair_tick: int | None = None
+    # A lat/lon key identifies a segment to the machine but tells a road engineer
+    # nothing. These carry the same stretch in the language a depot actually uses.
+    landmarks: str = ""                 # "Guindy → Saidapet"
+    corridor: str = ""                  # "GST Road → Anna Salai"
+    served_by: List[str] = field(default_factory=list)   # ["21C", "114"]
+
+    @property
+    def location(self) -> str:
+        """What a human would call this stretch of road."""
+        if self.landmarks and self.corridor:
+            return f"{self.landmarks}  ·  {self.corridor}"
+        return self.landmarks or self.corridor or self.segment_id
 
     # ---- what the pipeline is allowed to know ----------------------------
 
@@ -179,6 +197,10 @@ class SegmentHealth:
     def to_dict(self) -> dict:
         return {
             "segment_id": self.segment_id,
+            "location": self.location,
+            "landmarks": self.landmarks,
+            "corridor": self.corridor,
+            "served_by": self.served_by,
             "a": list(self.a), "b": list(self.b),
             "length_m": round(self.length_m, 1),
             "passes": self.passes,
@@ -205,6 +227,7 @@ class WorkOrder:
     raised_tick: int
     priority: float
     claimed_fixed_tick: int | None = None
+    location: str = ""
     verdict: str = "OPEN"
     verified_tick: int | None = None
     evidence: dict = field(default_factory=dict)
@@ -213,6 +236,7 @@ class WorkOrder:
         return {
             "order_id": self.order_id, "asset_id": self.asset_id,
             "subtype": self.subtype, "segment_id": self.segment_id,
+            "location": self.location,
             "raised_tick": self.raised_tick, "priority": self.priority,
             "claimed_fixed_tick": self.claimed_fixed_tick,
             "status": self.verdict, "verified_tick": self.verified_tick,
@@ -223,9 +247,10 @@ class WorkOrder:
 class RoadCondition:
     """Roughness memory, degradation tracking and repair adjudication."""
 
-    def __init__(self, routes: Dict[str, list], haversine, rng_fn):
+    def __init__(self, routes: Dict[str, list], haversine, rng_fn, route_meta=None):
         self._haversine = haversine
         self._rng = rng_fn
+        self._route_meta = route_meta or {}
         self.segments: Dict[str, SegmentHealth] = {}
         self.orders: Dict[str, WorkOrder] = {}
         self._next_order = 1
@@ -238,26 +263,94 @@ class RoadCondition:
         lo, hi = sorted([a, b])
         return f"{lo[0]:.4f},{lo[1]:.4f}|{hi[0]:.4f},{hi[1]:.4f}"
 
+    def _place(self, route_id: str, i: int, n: int) -> str:
+        """Name waypoint i of a route after the area it passes through.
+
+        Routes carry a list of areas in travel order, but a polyline has its own
+        number of vertices, so the two are aligned proportionally rather than
+        assumed equal. A named stretch beats a lat/lon key for anyone who has to
+        actually go and repair it.
+        """
+        areas = [a for a in self._route_meta.get(route_id, {}).get("areas", "").split(" · ") if a]
+        if not areas or n < 2:
+            return ""
+        idx = round(i * (len(areas) - 1) / (n - 1))
+        return areas[max(0, min(len(areas) - 1, idx))]
+
     def _build(self, routes: Dict[str, list]) -> None:
-        for route in routes.values():
-            for i in range(len(route)):
-                a, b = route[i], route[(i + 1) % len(route)]
+        for route_id, route in routes.items():
+            n = len(route)
+            corridor = self._route_meta.get(route_id, {}).get("corridor", "")
+            short = route_id.split("-", 1)[-1]
+            for i in range(n):
+                a, b = route[i], route[(i + 1) % n]
                 if a == b:
                     continue
                 key = self.segment_key(a, b)
                 if key in self.segments:
+                    # A shared arterial: record that this route drives it too.
+                    seg = self.segments[key]
+                    if short not in seg.served_by:
+                        seg.served_by.append(short)
                     continue
+                here, nxt = self._place(route_id, i, n), self._place(route_id, (i + 1) % n, n)
+                landmarks = here if (here == nxt or not nxt) else f"{here} → {nxt}"
+                if i == n - 1 and landmarks:
+                    # The closing leg of a loop service, driven back the other way.
+                    landmarks += " (return leg)"
                 # Latent condition varies by stretch, deterministically. Some
                 # roads start sound; one starts already failing, so the demo has
                 # something at the intervention threshold from the outset.
                 spread = self._rng("iri", key)
                 decay = self._rng("decay", key)
-                self.segments[key] = SegmentHealth(
+                seg = SegmentHealth(
                     segment_id=key, a=a, b=b,
                     length_m=self._haversine(a[0], a[1], b[0], b[1]),
                     true_iri=2.2 + spread * 4.6,
                     degradation_rate=BASE_DEGRADATION_PER_TICK * (0.4 + decay * 2.2),
+                    landmarks=landmarks, corridor=corridor, served_by=[short],
                 )
+                self._seed_history(seg, route_id)
+                self.segments[key] = seg
+
+    def nearest_location(self, lat: float, lng: float) -> str:
+        """Name the stretch of road a coordinate sits on.
+
+        A discovered asset arrives as a lat/lng from clustered sightings — it
+        belongs to no segment by construction. Attaching it to the closest one
+        gives the operator somewhere to send a crew, which a decimal degree does
+        not. Compared against segment midpoints: the segments are short relative
+        to the spacing between them, so the midpoint is sufficient.
+        """
+        best, best_d = None, float("inf")
+        for seg in self.segments.values():
+            mid_lat = (seg.a[0] + seg.b[0]) / 2
+            mid_lng = (seg.a[1] + seg.b[1]) / 2
+            d = (mid_lat - lat) ** 2 + (mid_lng - lng) ** 2
+            if d < best_d:
+                best, best_d = seg, d
+        return best.location if best else ""
+
+    def _seed_history(self, seg: SegmentHealth, route_id: str) -> None:
+        """Back-fill the passes this route already made before the demo started.
+
+        PRAYAAN's whole claim is memory across time, and a trend needs history to
+        be a trend. A control room opened on day one of a deployment that has
+        been running for weeks should show that history, not an empty panel — so
+        the prior passes are reconstructed from the same physics and the same
+        noise model that govern live ones, rolled backwards from today.
+
+        These are ordinary measurements at negative ticks: the estimator, the
+        confidence gate and the least-squares fit treat them exactly as they
+        treat a pass made a minute ago. Nothing here is a hand-written number.
+        """
+        short = route_id.split("-", 1)[-1]
+        for k in range(HISTORY_PASSES, 0, -1):
+            tick = -k * HISTORY_PASS_INTERVAL
+            # The road was smoother back then, by exactly its own decay rate.
+            was = max(1.0, seg.true_iri - seg.degradation_rate * (k * HISTORY_PASS_INTERVAL))
+            noise = (self._rng("imu-history", short, seg.segment_id, tick) - 0.5) * 2 * MEASUREMENT_NOISE
+            seg.measurements.append((tick, round(max(0.8, was + noise), 3), f"MTC-{short}"))
 
     # -- per-tick physics ---------------------------------------------------
 
@@ -304,6 +397,9 @@ class RoadCondition:
         order = WorkOrder(
             order_id=oid, asset_id=asset["id"], subtype=asset["subtype"],
             segment_id=segment_key, raised_tick=tick, priority=asset.get("priority", 0.0),
+            location=(asset.get("name")
+                      or (self.segments[segment_key].location
+                          if segment_key in self.segments else "")),
         )
         self.orders[oid] = order
         return order
