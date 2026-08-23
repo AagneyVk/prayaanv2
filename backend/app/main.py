@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from .simulation import simulation
 from .sumo_micro import generate_bus_twin, status as sumo_status
+from . import routing
 
 app = FastAPI(title="PRAYAAN V2 Urban Intelligence API", version="2.2.0")
 
@@ -66,46 +67,50 @@ def bus_micro_twin(bus_id: str):
 
 @app.get("/api/v2/explain/{asset_id}")
 def explain(asset_id: str):
-    matching = [ev for ev in simulation.latest_events if ev.get("asset_id") == asset_id]
-    if not matching:
-        return {
-            "asset_id": asset_id,
-            "available": False,
-            "reason": "No observation has reached this asset yet in the current demo run.",
-        }
-    latest = matching[0]
-    severity = latest["severity"]
-    confidence = latest["fused_confidence"]
-    persistence = latest["persistence_ticks"]
-    observations = latest["observations"]
-    independent_buses = latest["independent_buses"]
-    exposure_factor = 0.65 + min(observations, 5) * 0.06
-    consensus_factor = min(1.0, independent_buses / 3.0)
-    priority = min(
-        100.0,
-        100 * (
-            0.38 * severity
-            + 0.30 * confidence
-            + 0.17 * exposure_factor
-            + 0.15 * consensus_factor
-        ),
-    )
+    """Explainable maintenance priority for a DISCOVERED asset.
+
+    The scoring used to live here, duplicated from the simulation and drifting
+    from it. It now has one home, next to the evidence it scores.
+    """
+    return simulation.explain(asset_id)
+
+
+@app.get("/api/v2/diagnostics")
+def diagnostics():
+    """Score the pipeline against ground truth it is never allowed to read.
+
+    Deliberately its own endpoint: this is how we evaluate the system, not
+    something the system consumes. In a deployment this is a survey crew.
+    """
+    return simulation.diagnostics()
+
+
+@app.get("/api/v2/routing/advisory/{bus_id}")
+def routing_advisory(bus_id: str):
+    """Should this bus avoid a road because of a CONFIRMED defect?"""
+    state = simulation.snapshot()
+    return routing.advisory(bus_id, state["assets"], state["corridors"])
+
+
+@app.get("/api/v2/routing/hazard-layer")
+def hazard_layer():
+    """Fleet-confirmed hazards as GeoJSON, for other systems to ingest."""
+    state = simulation.snapshot()
+    return routing.hazard_layer(state["assets"])
+
+
+@app.get("/api/v2/routing/graph")
+def routing_graph():
+    """The road graph and its current hazard penalties, for inspection."""
+    state = simulation.snapshot()
+    nodes, adj = routing.build_graph()
+    penalties = routing.edge_penalties(state["assets"], nodes, adj)
     return {
-        "asset_id": asset_id,
-        "available": True,
-        "priority_score": round(priority, 1),
-        "reasoning": {
-            "severity": severity,
-            "fused_confidence": confidence,
-            "observations": observations,
-            "independent_buses": independent_buses,
-            "persistence_ticks": persistence,
-            "exposure_factor": round(exposure_factor, 3),
-            "consensus_factor": round(consensus_factor, 3),
-        },
-        "formula": "100 × (0.38·severity + 0.30·fusion + 0.17·exposure + 0.15·cross_bus_consensus)",
-        "recommendation": "PRIORITY REVIEW" if priority >= 75 else "MONITOR / SCHEDULE",
-        "explainability": "All terms are exposed to the operator; no black-box priority score is used in this prototype.",
+        "nodes": [{"key": k, "lat": v[0], "lng": v[1]} for k, v in nodes.items()],
+        "edges": [
+            {"key": k, **v} for k, v in sorted(penalties.items(), key=lambda kv: -kv[1]["penalty"])
+        ],
+        "note": "Only CONFIRMED assets contribute penalty. Unverified candidates never move a bus.",
     }
 
 

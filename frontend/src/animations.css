@@ -1,0 +1,337 @@
+/* PRAYAAN V2 — motion layer.
+   Kept in its own file so the visual system in styles.css stays readable and so
+   the whole animation set can be disabled in one import if a projector or a
+   low-power laptop struggles during judging. */
+
+/* ---- map ---------------------------------------------------------------- */
+
+/* Confirmed defects breathe so the eye is pulled to consensus, not to noise. */
+.site-confirmed-pulse {
+  animation: sitePulse 2.1s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes sitePulse {
+  0%, 100% { stroke-opacity: 1; stroke-width: 2.5px; }
+  50%      { stroke-opacity: .35; stroke-width: 6px; }
+}
+
+.leaflet-container path { transition: none; }
+
+/* ---- metric cards ------------------------------------------------------- */
+
+.counter { font-variant-numeric: tabular-nums; }
+
+.metric-card {
+  transition: border-color .35s ease, box-shadow .35s ease, transform .35s ease;
+}
+.metric-card:hover { transform: translateY(-1px); }
+
+/* When a defect reaches cross-bus consensus this is the number that matters,
+   so it gets a standing glow rather than a one-shot flash a judge might miss. */
+.confirmed-metric {
+  position: relative;
+  border-color: rgba(52, 211, 153, .35) !important;
+}
+.confirmed-metric:after {
+  content: '';
+  position: absolute; inset: -1px;
+  border: 1px solid rgba(52, 211, 153, .55);
+  border-radius: 5px;
+  animation: confirmGlow 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes confirmGlow {
+  0%, 100% { opacity: .15; box-shadow: 0 0 0 rgba(52, 211, 153, 0); }
+  50%      { opacity: .7;  box-shadow: 0 0 18px rgba(52, 211, 153, .22); }
+}
+
+/* ---- evidence stream ---------------------------------------------------- */
+
+/* New observations slide in from the sensing edge rather than appearing, so a
+   judge watching the map can see the cause and the consequence connect. */
+.event-stream button {
+  animation: evidenceIn .42s cubic-bezier(.22, .9, .3, 1) both;
+  transition: border-color .25s ease, background .25s ease, transform .25s ease;
+}
+.event-stream button:hover { transform: translateX(2px); }
+@keyframes evidenceIn {
+  from { opacity: 0; transform: translateX(16px) scale(.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+.event-symbol { transition: transform .3s ease, border-color .3s ease; }
+.event-stream button:hover .event-symbol { transform: rotate(-6deg) scale(1.06); }
+
+/* ---- live bars ---------------------------------------------------------- */
+
+.coverage-bar i { transition: width .9s cubic-bezier(.3, .8, .3, 1); }
+.mini-risk:before { transition: width .9s cubic-bezier(.3, .8, .3, 1); }
+
+/* Fleet activity indicator: a real heartbeat, staggered per row so the list
+   reads as six independent nodes rather than one blinking block. */
+.bus-list button:nth-child(odd)  .bus-pulse { animation: nodePulse 1.9s ease-in-out infinite; }
+.bus-list button:nth-child(even) .bus-pulse { animation: nodePulse 1.9s ease-in-out infinite .55s; }
+@keyframes nodePulse {
+  0%, 100% { box-shadow: 0 0 6px var(--cyan); opacity: .75; }
+  50%      { box-shadow: 0 0 14px var(--cyan); opacity: 1; }
+}
+
+/* ---- provenance banner -------------------------------------------------- */
+
+/* A slow scanline across the provenance strip. The banner is the honesty
+   statement of the whole demo, so it should never look like static chrome the
+   eye can filter out. */
+.provenance-primary { position: relative; overflow: hidden; }
+.provenance-primary:after {
+  content: '';
+  position: absolute; top: 0; bottom: 0; width: 45%;
+  background: linear-gradient(90deg, transparent, rgba(34, 211, 238, .18), transparent);
+  animation: provenanceSweep 4.5s linear infinite;
+}
+@keyframes provenanceSweep {
+  from { transform: translateX(-120%); }
+  to   { transform: translateX(320%); }
+}
+
+/* ---- accessibility ------------------------------------------------------ */
+
+@media (prefers-reduced-motion: reduce) {
+  .site-confirmed-pulse,
+  .confirmed-metric:after,
+  .event-stream button,
+  .bus-list .bus-pulse,
+  .provenance-primary:after {
+    animation: none !important;
+  }
+}
+
+/* ---- routing advisory --------------------------------------------------- */
+
+/* The advisory is the only place PRAYAAN proposes an ACTION, so it is styled to
+   read as a recommendation with reasoning attached — never as an alarm. */
+.advisory-card {
+  margin-top: 14px;
+  border: 1px solid #1f4f6b;
+  background: linear-gradient(135deg, rgba(13, 40, 60, .9), rgba(8, 22, 35, .9));
+  border-radius: 5px;
+  padding: 14px;
+  animation: evidenceIn .45s cubic-bezier(.22, .9, .3, 1) both;
+}
+.advisory-card.advise_reroute { border-color: rgba(251, 191, 36, .55); }
+.advisory-card.recommend_closure { border-color: rgba(255, 93, 108, .6); }
+.advisory-card.no_action { opacity: .82; }
+
+.advisory-head { display: flex; align-items: center; gap: 10px; }
+.advisory-head svg { color: var(--cyan); flex: none; }
+.advisory-head > div { flex: 1; }
+.advisory-head span { display: block; font-size: 7px; letter-spacing: .18em; color: #5d7d95; }
+.advisory-head b { display: block; font-size: 13px; margin-top: 3px; letter-spacing: .04em; }
+.advisory-head small { font-size: 7px; color: #4f7089; text-align: right; max-width: 140px; }
+
+.advisory-reason { font-size: 9px; line-height: 1.65; color: #93b0c6; margin: 10px 0 12px; }
+
+.advisory-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.advisory-compare > div { padding: 11px; background: #08192a; border: 1px solid #163650; }
+.advisory-compare > div.advised {
+  border-color: rgba(251, 191, 36, .45);
+  background: linear-gradient(135deg, rgba(70, 50, 12, .5), rgba(8, 25, 42, .8));
+}
+.advisory-compare span { display: block; font-size: 7px; letter-spacing: .12em; color: #63819a; }
+.advisory-compare strong { display: block; font-size: 20px; margin: 7px 0 3px; }
+.advisory-compare small { font-size: 7px; color: #6f8ca3; }
+
+/* Every penalty term is shown. An operator asked to divert a bus is owed the
+   arithmetic, not just the verdict. */
+.advisory-causes { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 5px; }
+.advisory-causes li {
+  padding: 7px 9px; background: #071522; border: 1px solid #15354e;
+  font-size: 8px; color: #9fbdd2;
+}
+.advisory-causes b { color: var(--cyan); font-family: ui-monospace, monospace; margin-right: 5px; }
+.advisory-causes span { display: block; margin-top: 3px; color: #63819a; font-size: 7px; }
+
+.advisory-scope { font-size: 7px; line-height: 1.6; color: #5e7c94; margin: 11px 0 0; }
+
+/* ---- discovery metrics -------------------------------------------------- */
+
+.discovery-grid { margin-top: 8px; }
+.discovery-grid .metric-card b { font-size: 18px; }
+.small-figure { font-size: 11px !important; letter-spacing: .08em; color: #8fcde6; }
+
+.layer-control { right: 116px !important; }
+
+/* ---- directional bus markers -------------------------------------------- */
+
+/* A circle cannot show heading, and heading is half the sensing story — which
+   camera saw a defect depends entirely on which way the bus was facing. */
+.bus-div-icon { background: none; border: 0; }
+
+.bus-glyph {
+  width: 26px; height: 26px;
+  position: relative;
+  transition: transform .35s ease-out;   /* rotate smoothly, never snap */
+}
+.bus-arrow {
+  position: absolute; left: 50%; top: 50%;
+  width: 0; height: 0;
+  transform: translate(-50%, -50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 13px solid #13d5ff;
+  filter: drop-shadow(0 0 5px rgba(19, 213, 255, .85));
+}
+/* Headlight cone, night only — the same ambient value that gates detection. */
+.bus-beam { display: none; }
+.bus-glyph.night .bus-beam {
+  display: block;
+  position: absolute; left: 50%; bottom: 60%;
+  width: 0; height: 0;
+  transform: translateX(-50%);
+  border-left: 13px solid transparent;
+  border-right: 13px solid transparent;
+  border-bottom: 30px solid rgba(255, 236, 170, .16);
+  animation: beamFlicker 3.4s ease-in-out infinite;
+}
+@keyframes beamFlicker {
+  0%, 100% { opacity: .75; }
+  50%      { opacity: 1; }
+}
+
+/* ---- ambient lighting --------------------------------------------------- */
+
+/* Tint driven by the backend's ambient value. Pointer-events off so it never
+   intercepts a click on the map beneath it. */
+.lighting-veil {
+  position: absolute; inset: 0; z-index: 500;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(4, 10, 30, .78), rgba(2, 6, 18, .88));
+  transition: opacity 1.2s linear;
+}
+
+.lighting-chip {
+  position: absolute; z-index: 620; left: 18px; bottom: 54px;
+  display: flex; align-items: center; gap: 9px;
+  padding: 8px 11px;
+  background: rgba(6, 15, 25, .85);
+  border: 1px solid #173650;
+  font-size: 8px; letter-spacing: .14em;
+  transition: border-color .8s ease, color .8s ease;
+}
+.lighting-chip span { color: #7ea6c2; }
+.lighting-chip b { font-size: 12px; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+.lighting-chip small { color: #f3bf62; letter-spacing: .06em; }
+.lighting-chip.day     { border-color: rgba(251, 191, 36, .4); }
+.lighting-chip.day b   { color: #ffd88a; }
+.lighting-chip.night   { border-color: rgba(93, 184, 255, .4); }
+.lighting-chip.night b { color: #9ad2ff; }
+.lighting-chip.twilight   { border-color: rgba(255, 141, 110, .4); }
+.lighting-chip.twilight b { color: #ffb59c; }
+
+/* ---- camera scene subjects ---------------------------------------------- */
+
+/* Each camera renders the defect class it is actually looking at. The zebra
+   stripes fade left-to-right because that is what worn thermoplastic does —
+   it goes first where the wheels track. */
+.zebra-crossing {
+  position: absolute; left: 30%; right: 30%; bottom: 16%;
+  height: 34px;
+  display: flex; gap: 4px; align-items: flex-end;
+  transform: perspective(90px) rotateX(52deg);
+}
+.zebra-crossing i {
+  flex: 1; height: 100%;
+  background: linear-gradient(180deg, #e8f4ff, #9db4c6);
+  border-radius: 1px;
+}
+.zebra-crossing.faded i { filter: saturate(.3); }
+
+.signal-head {
+  position: absolute; right: 22%; top: 14%;
+  width: 17px; padding: 3px;
+  background: #0d1620; border: 1px solid #2a3f52; border-radius: 3px;
+  display: grid; gap: 3px;
+}
+.signal-head .lamp {
+  width: 11px; height: 11px; border-radius: 50%;
+  background: #16222e; border: 1px solid #22323f;
+}
+/* A working head would light one lamp. All three dark IS the detection. */
+.signal-head.dark .lamp { animation: none; opacity: .45; }
+
+.waterlog {
+  position: absolute; left: 26%; right: 26%; bottom: 12%;
+  height: 42px;
+  background: linear-gradient(180deg, rgba(120, 190, 235, .32), rgba(60, 120, 170, .5));
+  border-radius: 45% 45% 40% 40%;
+  filter: blur(.4px);
+  animation: waterShimmer 4.2s ease-in-out infinite;
+}
+@keyframes waterShimmer {
+  0%, 100% { opacity: .72; transform: scaleX(1); }
+  50%      { opacity: .92; transform: scaleX(1.03); }
+}
+
+.zebra-box  { left: 32% !important; bottom: 52% !important; }
+.signal-box { right: 8%; left: auto !important; top: 46%; bottom: auto !important; }
+.water-box  { left: 30% !important; bottom: 58% !important; }
+
+/* Night camera: IR look — desaturated, grainier, dimmer. */
+.camera-scene.night { filter: saturate(.25) brightness(.72) contrast(1.15); }
+.camera-scene.night .road-perspective { opacity: .8; }
+
+@media (prefers-reduced-motion: reduce) {
+  .bus-glyph, .bus-glyph.night .bus-beam, .waterlog { animation: none !important; transition: none !important; }
+}
+
+/* ---- urban memory: condition, degradation, work orders ------------------- */
+
+.road-health{margin:16px 0;padding:14px;background:#0a1a2a;border:1px solid #173650;border-radius:5px}
+.road-health-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.road-health-head h3{margin:2px 0 0;font-size:15px}
+.road-health-head small{max-width:300px;text-align:right;font-size:7px;line-height:1.5;color:#5e7c94}
+.road-health-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:12px 0}
+.road-health-grid>div{padding:10px;background:#07131f;border:1px solid #14304a}
+.road-health-grid span{display:block;font-size:7px;letter-spacing:.13em;color:#63819a}
+.road-health-grid b{display:block;margin-top:5px;font-size:17px}
+
+/* One bar, four bands: the network's condition mix at a glance. */
+.condition-bar{display:flex;height:9px;border-radius:5px;overflow:hidden;background:#07131f}
+.condition-bar i{display:block;transition:width .8s ease}
+.condition-bar i.good,.condition-key i.good{background:#34d399}
+.condition-bar i.fair,.condition-key i.fair{background:#7dd3fc}
+.condition-bar i.poor,.condition-key i.poor{background:#fbbf24}
+.condition-bar i.critical,.condition-key i.critical{background:#fb7185}
+.condition-key{display:flex;gap:14px;margin-top:8px;font-size:7px;letter-spacing:.1em;color:#7b95ab}
+.condition-key span{display:flex;align-items:center;gap:5px}
+.condition-key i{width:8px;height:8px;border-radius:2px}
+
+.degradation-list,.work-orders{margin-top:18px}
+.degradation-row,.wo-row{
+  display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;
+  padding:11px 12px;margin-top:7px;background:#0a1a2a;border:1px solid #173650;border-radius:4px;
+}
+.degradation-row b,.wo-row b{font-size:10px}
+.degradation-row span,.wo-row span{display:block;margin-top:3px;font-size:8px;color:#68859b}
+.degradation-row strong{font-size:15px;color:#fbbf24;font-variant-numeric:tabular-nums}
+.degradation-row strong small{font-size:7px;color:#6f8ca3;margin-left:3px}
+.degradation-row em,.wo-row em{grid-column:1/3;font-style:normal;font-size:8px;color:#7fa3bd}
+.degradation-row i{grid-column:1/3;font-style:normal;font-size:7px;color:#5e7c94}
+
+.wo-row{grid-template-columns:74px 1fr auto}
+.wo-row strong{font-size:9px;letter-spacing:.06em}
+.wo-row em{grid-column:1/4}
+.wo-row.verified_fixed{border-color:rgba(52,211,153,.45)}
+.wo-row.verified_fixed strong{color:#34d399}
+.wo-row.disputed{border-color:rgba(251,113,133,.5)}
+.wo-row.disputed strong{color:#fb7185}
+.wo-row.partially_verified strong{color:#fbbf24}
+.wo-row.claimed_fixed strong,.wo-row.open strong{color:#7dd3fc}
+
+.wo-counts{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0 4px}
+.wo-counts span{padding:6px 9px;background:#07131f;border:1px solid #14304a;font-size:7px;letter-spacing:.09em;color:#7b95ab}
+.wo-counts b{margin-left:6px;font-size:11px;color:#e6f4ff}
+.wo-counts span.verified_fixed{border-color:rgba(52,211,153,.4)}
+.wo-counts span.disputed{border-color:rgba(251,113,133,.45)}
+.road-health-grid b small{display:block;margin-top:4px;font-size:6.5px;letter-spacing:.08em;color:#5e7c94;font-weight:400}
+.condition-bar i.unsurveyed,.condition-key i.unsurveyed{background:#22384c}

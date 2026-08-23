@@ -1,1 +1,126 @@
 .micro-launch-card{margin-top:16px;border:1px solid rgba(0,229,255,.25);background:linear-gradient(135deg,rgba(0,229,255,.08),rgba(15,22,34,.86));padding:14px 16px;border-radius:14px;display:flex;align-items:center;justify-content:space-between;gap:16px}.micro-launch-card>div{display:flex;align-items:center;gap:12px}.micro-launch-card span{font-size:10px;letter-spacing:.16em;color:#68dff2}.micro-launch-card b{display:block}.micro-launch-card small{color:#8c9aab}.micro-launch-card button{display:flex;align-items:center;gap:7px;border:1px solid #26d7ef;background:#072d36;color:#bff7ff;padding:10px 13px;border-radius:10px;font-weight:800}.micro-twin-overlay{position:fixed;inset:0;z-index:5000;background:rgba(2,4,8,.82);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:24px}.micro-twin-shell{position:relative;width:min(1240px,96vw);height:min(780px,92vh);background:#06090f;border:1px solid rgba(73,223,255,.28);border-radius:18px;overflow:hidden;box-shadow:0 30px 120px rgba(0,0,0,.75)}.micro-twin-head{position:absolute;left:0;right:0;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;padding:16px 18px;background:linear-gradient(180deg,rgba(5,8,13,.97),rgba(5,8,13,.55),transparent)}.micro-twin-head span{font-size:10px;letter-spacing:.17em;color:#43dff8}.micro-twin-head h2{font-size:20px;margin:3px 0 0}.micro-actions{display:flex;gap:7px;align-items:center}.micro-actions>button{width:36px;height:36px;border-radius:9px;border:1px solid rgba(255,255,255,.12);background:rgba(11,18,27,.85);color:#eafcff;display:grid;place-items:center}.micro-camera-switch,.micro-speed-switch{display:flex;padding:3px;background:rgba(8,13,20,.82);border:1px solid rgba(255,255,255,.09);border-radius:10px}.micro-camera-switch button,.micro-speed-switch button{border:0;background:transparent;padding:8px;color:#637487;font-size:9px;font-weight:800}.micro-camera-switch button.active,.micro-speed-switch button.active{color:#bffaff;background:rgba(0,213,255,.12);border-radius:7px}.micro-speed-switch{border-color:rgba(255,185,66,.18)}.micro-speed-switch button{min-width:34px;color:#8c7e68}.micro-speed-switch button.active{color:#ffd88c;background:rgba(255,177,55,.12);box-shadow:inset 0 0 0 1px rgba(255,190,70,.12)}.micro-canvas{position:absolute;inset:0}.micro-loading,.micro-error{position:absolute;inset:0;z-index:12;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;background:#06090f;color:#8ca0b7}.micro-loading:before{content:'';width:42px;height:42px;border:2px solid rgba(0,229,255,.18);border-top-color:#00e5ff;border-radius:50%;animation:microspin .8s linear infinite}@keyframes microspin{to{transform:rotate(360deg)}}.micro-error b{color:#ff6878}.micro-hud{position:absolute;z-index:18;bottom:62px;background:rgba(5,10,17,.84);border:1px solid rgba(77,205,239,.18);backdrop-filter:blur(8px);padding:10px 12px;border-radius:10px;min-width:220px}.micro-hud.left{left:18px}.micro-hud.right{right:18px;text-align:right}.micro-hud span{display:block;color:#5e758a;font-size:9px;letter-spacing:.14em}.micro-hud b{font-size:13px;color:#dffbff}.micro-hud small{display:block;margin-top:2px;color:#7c8a9a;font-size:10px}.micro-types{position:absolute;left:50%;transform:translateX(-50%);bottom:65px;z-index:18;display:flex;gap:6px}.micro-types span{font-size:9px;border:1px solid rgba(255,255,255,.1);background:rgba(4,8,13,.8);padding:6px 8px;border-radius:999px;color:#8fa2b6}.micro-types b{color:#fff}.micro-timeline{position:absolute;left:18px;right:18px;bottom:22px;height:4px;background:rgba(255,255,255,.08);z-index:18;border-radius:999px;overflow:hidden}.micro-timeline i{display:block;height:100%;background:linear-gradient(90deg,#00b7ff,#00f0d0);box-shadow:0 0 18px #00d9ff;transition:width .08s linear}.analysis-status{position:absolute;z-index:24;left:50%;top:75px;transform:translateX(-50%);display:flex;gap:7px;align-items:center}.analysis-status span{display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:999px;background:rgba(6,12,19,.86);border:1px solid rgba(255,255,255,.08);color:#718296;font-size:9px;letter-spacing:.12em;font-weight:800}.analysis-status span.live{color:#cfffff;border-color:rgba(0,229,255,.35);box-shadow:0 0 26px rgba(0,229,255,.12)}.analysis-status b{padding:7px 10px;border-radius:999px;background:rgba(255,170,40,.12);border:1px solid rgba(255,176,55,.25);color:#ffc867;font-size:8px;letter-spacing:.1em}.scenario-alert{position:absolute;z-index:30;right:18px;top:118px;left:auto;transform:none;width:330px;max-height:500px;overflow:auto;padding:16px 18px;background:rgba(8,12,18,.96);border:1px solid #ffbd45;border-radius:14px;box-shadow:0 0 70px rgba(255,170,40,.2);animation:eventSideIn .28s ease-out}.scenario-alert.persistent:after{content:'';position:absolute;inset:-1px;border-radius:14px;pointer-events:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.03)}.scenario-alert.critical{border-color:#ff4967;box-shadow:0 0 78px rgba(255,45,85,.3)}.scenario-alert.medium{border-color:#4ecfff}.scenario-alert-top{display:flex;align-items:center;gap:8px;color:#ffca65;font-size:10px;letter-spacing:.13em}.scenario-alert-top b{margin-left:auto;font-size:15px;color:#fff}.scenario-alert p{font-size:12px;color:#c4d0db;margin:10px 0;line-height:1.45}.scenario-alert>small{display:block;color:#8798a8;margin-top:9px;line-height:1.4}.analysis-steps{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:11px 0}.analysis-steps span{position:relative;padding:7px 6px;text-align:center;border-radius:7px;background:#0d151f;border:1px solid rgba(255,255,255,.07);font-size:8px;letter-spacing:.08em;color:#5c6b7c;overflow:hidden}.analysis-steps span.done{color:#cfffff;border-color:rgba(0,229,255,.28);background:rgba(0,229,255,.08);box-shadow:inset 0 -2px 0 rgba(0,229,255,.55)}.analysis-steps span.done:before{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent);animation:scanStep 1.25s linear infinite}@keyframes scanStep{from{transform:translateX(-100%)}to{transform:translateX(100%)}}.scenario-evidence{display:grid;grid-template-columns:1fr;gap:6px}.scenario-evidence span{background:#111925;border:1px solid rgba(255,255,255,.08);padding:7px 9px;border-radius:6px;color:#718397;font-size:9px}.scenario-evidence b{color:#eafaff}.track-lock{display:flex;align-items:center;gap:7px;margin-top:9px;padding:8px 10px;border-radius:8px;background:rgba(255,48,78,.09);border:1px solid rgba(255,48,78,.25);color:#ff9aaa;font-size:9px;letter-spacing:.08em}.track-lock b{color:#fff}.track-lock i{margin-left:auto;font-style:normal;color:#ff4e68;font-weight:900;animation:lockPulse 1s ease-in-out infinite}@keyframes lockPulse{50%{opacity:.35}}.alert-persist-note{margin-top:9px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06);font-size:9px;color:#637487}.scenario-stack{position:absolute;z-index:22;left:18px;top:105px;width:255px;display:grid;gap:6px}.scenario-stack-title{font-size:8px;letter-spacing:.12em;color:#69798a;padding:0 2px 3px}.scenario-mini{display:flex;gap:8px;align-items:flex-start;padding:9px 10px;border:1px solid rgba(255,190,60,.25);background:rgba(7,12,18,.91);border-radius:8px;color:#ffbd45;box-shadow:0 8px 25px rgba(0,0,0,.18)}.scenario-mini.critical{color:#ff5871;border-color:rgba(255,70,100,.35)}.scenario-mini.medium{color:#4ecfff;border-color:rgba(78,207,255,.25)}.scenario-mini b,.scenario-mini small{display:block}.scenario-mini b{font-size:10px}.scenario-mini small{font-size:8px;color:#8292a2;margin-top:2px}.scenario-route{position:absolute;z-index:18;left:25%;right:25%;bottom:105px;height:3px;background:rgba(255,255,255,.13);overflow:visible}.route-progress{position:absolute;left:0;top:0;height:100%;max-width:100%;background:linear-gradient(90deg,#00a7ff,#00f0d0);box-shadow:0 0 14px rgba(0,225,255,.5);transition:width .2s linear}.scenario-marker{position:absolute;transform:translateX(-50%);bottom:6px;font-size:8px;letter-spacing:.08em;color:#ffbd45;white-space:nowrap}.scenario-marker:after{content:'';display:block;width:7px;height:7px;border-radius:50%;background:currentColor;margin:4px auto;box-shadow:0 0 14px currentColor}.scenario-marker.r{color:#ff5871}.scenario-marker.w{color:#4ecfff}@keyframes eventSideIn{from{transform:translateX(18px);opacity:0}to{transform:translateX(0);opacity:1}}@media(max-width:1050px){.scenario-alert{width:290px}.scenario-stack{width:220px}.scenario-route{left:22%;right:22%}}@media(max-width:900px){.micro-twin-overlay{padding:8px}.micro-twin-shell{height:94vh}.micro-camera-switch{display:none}.micro-speed-switch{display:flex}.scenario-stack{display:none}.scenario-alert{left:12px;right:12px;top:auto;bottom:52px;width:auto;max-height:38vh;transform:none}.micro-types,.scenario-route{display:none}.analysis-status b{display:none}}
+/* Six detections on one 820 m corridor collide at this scale, so labels
+   alternate height. Staggering beats truncating: the operator needs to read
+   what was found, not guess from a stub. */
+.scenario-marker{max-width:120px;overflow:visible;text-overflow:clip}
+.scenario-marker:nth-child(even){opacity:.92}
+
+/* ---- live vehicle track -------------------------------------------------- */
+
+/* A driving anomaly is a moving vehicle under continuous observation, so it gets
+   live telemetry that updates every frame. A road defect gets a static evidence
+   card. Making them look the same was the whole problem: the operator could not
+   tell a tracked vehicle from a hole in the road. */
+.track-live{
+  /* Left column, under the evidence stack. It previously sat top-right and was
+     covered by the incident panel — the one readout that proves a VEHICLE is
+     being followed was hidden behind the card describing a road defect. */
+  position:absolute;z-index:24;left:18px;bottom:108px;width:216px;
+  padding:11px 12px;background:rgba(28,8,12,.92);
+  border:1px solid rgba(255,48,78,.55);border-radius:9px;
+  box-shadow:0 0 34px rgba(255,48,78,.18);
+  animation:trackIn .3s ease-out both;
+}
+@keyframes trackIn{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+.track-live-top{display:flex;align-items:center;gap:7px;color:#ff8194;font-size:9px;letter-spacing:.13em}
+.track-live-top i{margin-left:auto;font-style:normal;font-size:8px;color:#ffc2cc;
+  border:1px solid rgba(255,145,165,.45);padding:2px 5px;border-radius:3px}
+.track-live>b{display:block;margin:7px 0 9px;font-family:ui-monospace,monospace;font-size:13px;color:#ffe3e8}
+.track-live-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.track-live-grid span{display:block;font-size:7px;letter-spacing:.11em;color:#c48b96}
+.track-live-grid b{display:block;margin-top:3px;font-size:12px;color:#fff;font-variant-numeric:tabular-nums}
+.track-live small{display:block;margin-top:9px;font-size:7px;color:#a3717c;letter-spacing:.06em}
+
+/* The lock rides the vehicle, so it must pulse faster than a static beacon —
+   it reads as "following", not "marking". */
+.anomaly-why{margin-top:9px;padding:8px 10px;background:rgba(255,48,78,.07);
+  border-left:2px solid rgba(255,48,78,.5)}
+.anomaly-why b{display:block;font-size:8px;letter-spacing:.13em;color:#ff9dad}
+.anomaly-why span{display:block;margin-top:4px;font-size:8px;line-height:1.6;color:#c9a2aa}
+
+@media(max-width:900px){.track-live{display:none}}
+
+/* Three stagger levels, not two: six defects plus anomalies on one 820 m strip
+   still collided when only alternating. */
+.scenario-route{height:56px}
+.scenario-marker{font-size:7px;letter-spacing:.05em}
+
+/* ---- vehicles are not places -------------------------------------------- */
+
+/* A road defect is a coordinate the city will send a crew to. A driving anomaly
+   is a vehicle that was somewhere for a moment and then left. Giving them the
+   same card, the same colour and the same strip marker was the whole complaint:
+   they looked identical because they were rendered identically. */
+.scenario-stack-title.vehicle{margin-top:10px;color:#ff8194;border-color:rgba(255,48,78,.35)}
+.scenario-mini.vehicle{
+  border-color:rgba(255,48,78,.45);
+  background:linear-gradient(135deg,rgba(48,10,16,.9),rgba(12,8,10,.9));
+  color:#ffd3da;
+}
+.scenario-mini.vehicle b{font-family:ui-monospace,monospace;color:#ff9dad}
+
+/* Vehicle alerts read red and square-shouldered; asset alerts stay amber. */
+.scenario-alert.vehicle-alert{
+  border-color:rgba(255,48,78,.65);
+  background:linear-gradient(135deg,rgba(40,8,14,.96),rgba(10,6,9,.96));
+  box-shadow:0 0 46px rgba(255,48,78,.2);
+}
+.scenario-alert.vehicle-alert .scenario-alert-top{color:#ff8194}
+.scenario-alert.vehicle-alert .scenario-alert-top b{font-family:ui-monospace,monospace}
+
+.track-meter{margin-top:10px;height:4px;background:rgba(255,255,255,.09);border-radius:3px;overflow:hidden}
+.track-meter i{display:block;height:100%;background:linear-gradient(90deg,#ffb547,#ff304e);
+  box-shadow:0 0 12px rgba(255,48,78,.6);transition:width .5s ease}
+.track-meter-label{display:flex;justify-content:space-between;margin-top:5px;font-size:7px;letter-spacing:.1em;color:#c48b96}
+.track-meter-label b{color:#fff;font-variant-numeric:tabular-nums}
+
+/* ---- vehicle incident: its own channel, its own screen real estate -------- */
+
+/* Bottom-left, clear of the road-asset card at top-centre. Two independent
+   findings can now be on screen at once, which is the honest picture: the bus
+   observes road AND traffic simultaneously. */
+.vehicle-incident{
+  position:absolute;z-index:26;left:18px;bottom:150px;width:330px;
+  padding:14px 15px;border-radius:12px;
+  background:linear-gradient(135deg,rgba(42,8,14,.97),rgba(11,6,9,.97));
+  border:1px solid rgba(255,48,78,.6);
+  box-shadow:0 0 52px rgba(255,48,78,.22);
+  animation:vehIn .32s cubic-bezier(.22,.9,.3,1) both;
+}
+@keyframes vehIn{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
+.vehicle-incident-top{display:flex;align-items:center;gap:9px;color:#ff8194}
+.vehicle-incident-top svg{flex:none}
+.vehicle-incident-top span{font-size:8px;letter-spacing:.16em}
+.vehicle-incident-top b{margin-left:auto;font-family:ui-monospace,monospace;font-size:13px;color:#ffe3e8}
+.vehicle-incident-trigger{margin-top:9px;font-size:9px;letter-spacing:.12em;color:#ffb0bd}
+.vehicle-incident p{margin:9px 0 11px;font-size:9px;line-height:1.65;color:#d3b3ba}
+.vehicle-incident-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.vehicle-incident-grid span{
+  padding:6px 8px;background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,48,78,.18);border-radius:5px;
+  font-size:7px;letter-spacing:.06em;color:#bf8e97;
+}
+.vehicle-incident-grid b{display:block;margin-top:3px;font-size:11px;color:#fff;font-variant-numeric:tabular-nums}
+
+@media(max-width:1100px){.vehicle-incident{display:none}}
+
+/* Left column already holds the asset stack and the watch list, and the right
+   holds the road-asset card. The incident panel gets the free band across the
+   bottom — wide and short rather than tall, so it never collides with either. */
+.vehicle-incident{
+  left:50% !important;right:auto !important;
+  transform:translateX(-50%);
+  bottom:176px !important;
+  width:min(620px,56%) !important;
+}
+.vehicle-incident p{margin:8px 0 10px}
+.vehicle-incident-grid{grid-template-columns:repeat(3,1fr)}
+.vehicle-incident .anomaly-why{margin-top:10px}
+@keyframes vehIn{from{opacity:0;transform:translate(-50%,12px)}to{opacity:1;transform:translate(-50%,0)}}
+
+/* Keep the left stack from growing into the incident band. */
+.scenario-stack{max-height:340px;overflow:hidden}
+
+/* Narrow enough that the track id never slides under the road-asset card. */
+.vehicle-incident{width:min(560px,48%) !important}
+.vehicle-incident-top b{font-size:12px}
