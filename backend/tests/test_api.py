@@ -63,7 +63,7 @@ def test_sumo_micro_twin_produces_fcd_trajectories():
     assert status['netconvert'] is True
     assert status['transport'] == 'SUMO FCD subprocess export'
 
-    response = client.get('/api/v2/sumo/bus/MTC-021')
+    response = client.get('/api/v2/sumo/bus/MTC-21C')
     assert response.status_code == 200
     payload = response.json()
     assert payload['available'] is True, payload.get('reason')
@@ -172,7 +172,7 @@ def test_routing_advisory_refuses_disproportionate_detours():
     sim = UrbanSimulation(seed=42)
     for _ in range(400):
         state = sim.step(1.0)
-    for bus_id in ['MTC-021', 'MTC-034', 'MTC-057', 'MTC-102', 'MTC-118', 'MTC-145']:
+    for bus_id in ['MTC-21C', 'MTC-25G', 'MTC-108', 'MTC-500', 'MTC-114', 'MTC-1']:
         adv = routing.advisory(bus_id, state['assets'], state['corridors'])
         assert adv['available'] is True
         assert adv['action'] in {
@@ -195,7 +195,7 @@ def test_hazard_layer_publishes_only_confirmed_assets():
 
 
 def test_routing_endpoints_are_exposed():
-    assert client.get('/api/v2/routing/advisory/MTC-021').status_code == 200
+    assert client.get('/api/v2/routing/advisory/MTC-21C').status_code == 200
     assert client.get('/api/v2/routing/hazard-layer').status_code == 200
     graph = client.get('/api/v2/routing/graph').json()
     assert graph['nodes'] and graph['edges']
@@ -243,7 +243,7 @@ def test_ego_bus_actually_exists_in_the_simulation():
     noticed, because everything else was still there.
     """
     from app.sumo_micro import generate_bus_twin
-    twin = generate_bus_twin('MTC-021')
+    twin = generate_bus_twin('MTC-21C')
     assert twin['available'] is True, twin.get('reason')
     ego_frames = [f for f in twin['frames'] if f.get('ego')]
     assert len(ego_frames) > 50, 'ego bus missing from its own micro twin'
@@ -259,7 +259,7 @@ def test_driving_anomalies_are_derived_from_trajectories():
     behaviour actually happened.
     """
     from app.sumo_micro import generate_bus_twin
-    twin = generate_bus_twin('MTC-118')
+    twin = generate_bus_twin('MTC-114')
     anomalies = twin['anomalies']
     assert anomalies, 'no anomaly derived from a corridor containing aggressive drivers'
     for a in anomalies:
@@ -279,7 +279,7 @@ def test_detector_cannot_read_the_vehicle_type():
     homework — it would 'find' exactly what was planted and nothing else.
     """
     from app.sumo_micro import generate_bus_twin
-    twin = generate_bus_twin('MTC-021')
+    twin = generate_bus_twin('MTC-21C')
     kinds = {v['kind'] for f in twin['frames'] for v in f['vehicles']}
     assert 'rash' not in kinds
 
@@ -291,7 +291,7 @@ def test_anomaly_detection_is_not_limited_to_planted_vehicles():
     """
     from app.sumo_micro import generate_bus_twin
     flagged = []
-    for bus_id in ('MTC-021', 'MTC-057', 'MTC-118', 'MTC-102'):
+    for bus_id in ('MTC-21C', 'MTC-108', 'MTC-114', 'MTC-500'):
         twin = generate_bus_twin(bus_id)
         flagged.extend(a['track_ref'] for a in twin.get('anomalies', []))
     assert flagged, 'nothing flagged at all'
@@ -309,7 +309,7 @@ def test_no_fabricated_vehicle_identity_is_published():
     """
     import json
     from app.sumo_micro import generate_bus_twin
-    blob = json.dumps(generate_bus_twin('MTC-021'))
+    blob = json.dumps(generate_bus_twin('MTC-21C'))
     assert 'TN 09' not in blob
     assert 'plate_confidence' not in blob
 
@@ -317,7 +317,7 @@ def test_no_fabricated_vehicle_identity_is_published():
 def test_roadside_defects_are_detected_on_approach():
     """Detection geometry must be plausible for a forward camera."""
     from app.sumo_micro import generate_bus_twin, EGO_SENSOR_RANGE_M, MIN_STANDOFF_M
-    twin = generate_bus_twin('MTC-021')
+    twin = generate_bus_twin('MTC-21C')
     defects = [s for s in twin['scenarios'] if s['type'] != 'DRIVING_ANOMALY']
     assert defects
     for d in defects:
@@ -406,3 +406,42 @@ def test_inertial_sensing_covers_what_cameras_cannot():
             night_passes += sum(1 for s in sim.road.segments.values()
                                 if s.measurements and s.measurements[-1][0] == sim.tick)
     assert night_passes > 0, 'no road-condition data was gathered at night'
+
+
+def test_marking_detectability_peaks_at_partial_wear():
+    """The most dangerous crossings are the hardest ones to see.
+
+    A crisp crossing is not a defect; a half-worn one is unmistakable; one worn
+    to nothing is nearly invisible again. Detectability is therefore non-monotonic
+    while severity only rises — and the gap between them is the operational
+    warning: act on mid-wear detections, because the worst cases stop reporting.
+    """
+    from app.simulation import _marking_visibility, _marking_severity
+    crisp, half, gone = 0.05, 0.65, 1.0
+    assert _marking_visibility(half) > _marking_visibility(crisp)
+    assert _marking_visibility(half) > _marking_visibility(gone)
+    # Severity, unlike detectability, never improves.
+    assert _marking_severity(crisp) < _marking_severity(half) < _marking_severity(gone)
+
+
+def test_marking_wear_is_per_simulation_not_global():
+    """Wear is evolving ground truth, so it must belong to the instance.
+
+    It previously mutated the module-level EVENT_SITES dicts: two simulations
+    shared one city's paint, and reset() did not restore it.
+    """
+    from app.simulation import UrbanSimulation, EVENT_SITES, MARKING_TYPES
+    marking_id = next(s['id'] for s in EVENT_SITES if s['subtype'] in MARKING_TYPES)
+
+    a = UrbanSimulation(seed=42)
+    start = a._wear[marking_id]
+    for _ in range(300):
+        a.step(1.0)
+    assert a._wear[marking_id] > start, 'paint never wore'
+
+    # A fresh simulation must start from a fresh city.
+    b = UrbanSimulation(seed=42)
+    assert b._wear[marking_id] == start
+
+    a.reset()
+    assert a._wear[marking_id] == start

@@ -24,7 +24,44 @@ function vehicle(kind,ego=false){
  g.userData.target=new THREE.Vector3();return g
 }
 function pothole(){const g=new THREE.Group();const pit=new THREE.Mesh(new THREE.CylinderGeometry(1.15,.8,.13,22),mat(0x050505,1));pit.scale.z=.55;pit.position.y=.02;g.add(pit);const rim=new THREE.Mesh(new THREE.RingGeometry(.9,1.35,24),new THREE.MeshBasicMaterial({color:0x6d3f27,transparent:true,opacity:.85,side:THREE.DoubleSide}));rim.rotation.x=-Math.PI/2;rim.scale.y=.55;rim.position.y=.09;g.add(rim);return g}
-function zebra(){const g=new THREE.Group();for(let i=0;i<6;i++){const st=new THREE.Mesh(new THREE.BoxGeometry(.55,.02,11.6),new THREE.MeshBasicMaterial({color:0xd8e4ef,transparent:true,opacity:.28+i*0.055}));st.position.set(i*1.05-2.6,.09,0);g.add(st)}return g}
+function zebra(){
+ // A real zebra crossing has its bars running ALONG the direction of travel:
+ // each bar is ~0.5 m wide and ~4 m deep, repeated across the full carriageway.
+ // The previous version had them 90 degrees out — one long bar spanning the road,
+ // repeated down it, which is a stop-line pattern, not a crossing.
+ const g=new THREE.Group()
+ const DEPTH=4.2, BAR_W=0.5, PITCH=1.0, ROAD_W=12.4
+ const n=Math.floor(ROAD_W/PITCH)
+ for(let i=0;i<n;i++){
+  const z=-ROAD_W/2+PITCH/2+i*PITCH
+  // Thermoplastic wears fastest in the wheel tracks — roughly a metre either
+  // side of each lane centre — so the bars there are the faint ones. That
+  // pattern is the giveaway a human inspector looks for, so the model should
+  // show it rather than fading uniformly.
+  const wheelTrack=Math.min(Math.abs(Math.abs(z)-1.4),Math.abs(Math.abs(z)-5.5))
+  const wear=Math.max(0,1-wheelTrack/1.5)
+  const opacity=0.82-wear*0.62
+  const bar=new THREE.Mesh(new THREE.BoxGeometry(DEPTH,.02,BAR_W),
+    new THREE.MeshBasicMaterial({color:0xe9f1f8,transparent:true,opacity}))
+  bar.position.set(0,.085,z);g.add(bar)
+  // Worn bars break up rather than dimming evenly: scuffed patches of asphalt
+  // show through. Two dark slivers per bar reads as chipping at this scale.
+  if(wear>0.45)for(const off of [-DEPTH*0.22,DEPTH*0.19]){
+   const chip=new THREE.Mesh(new THREE.BoxGeometry(DEPTH*0.16,.025,BAR_W*1.05),
+     new THREE.MeshBasicMaterial({color:0x1a1d22,transparent:true,opacity:.75}))
+   chip.position.set(off,.088,z);g.add(chip)
+  }
+ }
+ // Give-way triangles on the approach: standard on Indian crossings and the
+ // strongest cue that this is a pedestrian facility and not painted hatching.
+ for(const side of [-1,1])for(let i=0;i<5;i++){
+  const t=new THREE.Mesh(new THREE.ConeGeometry(.28,.7,3),
+    new THREE.MeshBasicMaterial({color:0xd8e4ef,transparent:true,opacity:.4}))
+  t.rotation.x=-Math.PI/2;t.rotation.z=side>0?Math.PI/2:-Math.PI/2
+  t.position.set(side*(DEPTH/2+1.4),.086,-4.4+i*2.2);g.add(t)
+ }
+ return g
+}
 function signalHead(){const g=new THREE.Group();const post=new THREE.Mesh(new THREE.CylinderGeometry(.09,.12,5.4,10),mat(0x2b3742,.85));post.position.set(0,2.7,-6.6);g.add(post);const arm=new THREE.Mesh(new THREE.BoxGeometry(.12,.12,3.2),mat(0x2b3742,.85));arm.position.set(0,5.2,-5);g.add(arm);const box=new THREE.Mesh(new THREE.BoxGeometry(.5,1.5,.5),mat(0x11181f,.9));box.position.set(0,4.7,-3.5);g.add(box);
  // All three lamps unlit IS the detection — a working head would show one.
  for(const[i,c]of[[0,0x2a1416],[1,0x2a2413],[2,0x13261c]].entries()){const l=new THREE.Mesh(new THREE.SphereGeometry(.16,12,12),new THREE.MeshBasicMaterial({color:c[1]}));l.position.set(0,5.2-i*.45,-3.24);g.add(l)}return g}

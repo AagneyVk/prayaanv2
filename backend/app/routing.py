@@ -72,7 +72,14 @@ ADVISORY_MAX_DETOUR = 0.18  # never advise a detour costing >18% extra time
 # them would let the system escalate to shutting a road because a street is
 # generally shabby, which is exactly the disproportionate behaviour that makes
 # an advisory system get switched off.
-CRITICAL_SINGLE_PENALTY = 0.95
+# Calibrated against the actual weight range, not guessed. The maximum a single
+# defect can score is ~1.45 (a sunken manhole at full severity and confidence).
+# At 0.95 a merely-bad waterlogging cleared the bar and the system recommended
+# closing four of six arterials at once — advice no depot would follow twice, and
+# the fastest way to get an advisory system switched off. At 1.25 only a
+# near-maximal vehicle-impeding defect escalates, which is the intent: closure is
+# for "this will break an axle", not "this road is in poor condition".
+CRITICAL_SINGLE_PENALTY = 1.25
 
 # Roads that exist but carry no bus route.
 #
@@ -83,16 +90,23 @@ CRITICAL_SINGLE_PENALTY = 0.95
 # driver would actually use — the router may send a bus down them; the scheduled
 # service still runs its published route.
 CONNECTORS = [
-    ((13.0501, 80.2124), (13.0475, 80.2090)),
-    ((12.9756, 80.2207), (12.9702, 80.2210)),
-    ((13.0305, 80.2302), (13.0358, 80.2285)),
-    ((13.0337, 80.2688), (13.0282, 80.2661)),
-    ((13.0402, 80.2448), (13.0358, 80.2285)),
-    ((13.0402, 80.2448), (13.0475, 80.2592)),
-    ((13.0305, 80.2302), (13.0214, 80.2412)),
-    ((12.9864, 80.2451), (12.9916, 80.2642)),
-    ((13.0878, 80.1987), (13.0901, 80.2144)),
-    ((13.0475, 80.2592), (13.0282, 80.2661)),
+    # Real cross-streets linking the arterials, so the router has somewhere to
+    # send a bus. Without these the graph is six near-disjoint chains and no
+    # alternative path exists between adjacent stops — the router could never
+    # advise anything, which is a property of using bus routes as a proxy for the
+    # road network, not of Chennai.
+    ((13.0418, 80.2341), (13.0517, 80.2264)),   # T. Nagar ↔ Kodambakkam
+    ((13.0418, 80.2341), (13.0569, 80.2425)),   # T. Nagar ↔ Nungambakkam
+    ((13.0213, 80.2231), (13.0350, 80.2100)),   # Saidapet ↔ Ashok Nagar
+    ((13.0569, 80.2425), (13.0546, 80.2640)),   # Nungambakkam ↔ Royapettah
+    ((13.0500, 80.2824), (13.0330, 80.2680)),   # Marina ↔ Mylapore
+    ((13.0475, 80.2489), (13.0517, 80.2264)),   # Gemini ↔ Kodambakkam
+    ((12.9650, 80.2450), (12.9830, 80.2590)),   # Perungudi ↔ Thiruvanmiyur
+    ((13.0517, 80.2264), (13.0350, 80.2100)),   # Kodambakkam ↔ Ashok Nagar
+    ((13.0418, 80.2341), (13.0510, 80.2120)),   # T. Nagar ↔ Vadapalani
+    ((13.0475, 80.2489), (13.0330, 80.2680)),   # Gemini ↔ Mylapore
+    ((13.0827, 80.2707), (13.0546, 80.2640)),   # Central ↔ Royapettah
+    ((12.9756, 80.2207), (13.0067, 80.2206)),   # Velachery ↔ Guindy
 ]
 
 
@@ -103,10 +117,11 @@ def _node_key(lat: float, lng: float) -> str:
 def build_graph() -> Tuple[Dict[str, tuple], Dict[str, List[dict]]]:
     """Undirected road graph from the fleet's own route geometry.
 
-    The routes already share waypoints — four of them meet at (13.0067,80.2570)
-    — so a connected graph falls out of the data with no OSM import and no extra
-    dependency. 24 nodes is small enough that Dijkstra is effectively free, which
-    matters: this runs on every state poll.
+    Real arterials are shared, so the six services already meet at Broadway,
+    Central, Vadapalani, Kodambakkam, CMBT, Guindy, Chromepet, Tambaram and
+    Royapettah. A connected graph therefore falls out of the route data with no
+    OSM import and no extra dependency, and it is small enough (34 nodes) that
+    Dijkstra is effectively free — which matters, since this runs on every poll.
     """
     nodes: Dict[str, tuple] = {}
     adj: Dict[str, List[dict]] = {}

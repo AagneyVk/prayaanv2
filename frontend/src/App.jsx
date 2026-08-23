@@ -17,12 +17,22 @@ function Counter({ value, suffix = '', decimals = 0 }) {
 }
 
 const API = '/api/v2'
-const CHENNAI = [13.045, 80.235]
 
+// How dark the night overlay is allowed to get. It used to reach full strength
+// at ambient 0, which rendered the whole city black — the tint is meant to
+// communicate "the cameras are working harder now", not to hide the map.
+const MAX_NIGHT_VEIL = 0.42
+const CHENNAI = [13.040, 80.205]   // centred on the real network's extent
+
+// All six services, so the map shows the real arterial network rather than a
+// three-route sample. Kept in sync with backend/app/simulation.py ROUTES.
 const ROUTE_LINES = [
-  [[13.0827,80.2707],[13.0604,80.2496],[13.0402,80.2448],[13.0067,80.2570],[12.9864,80.2451]],
-  [[13.1143,80.1548],[13.0878,80.1987],[13.0694,80.1948],[13.0501,80.2124],[13.0305,80.2302]],
-  [[12.9249,80.1000],[12.9517,80.1413],[12.9756,80.2207],[13.0067,80.2570],[13.0402,80.2448]],
+  [[12.9249,80.1000],[12.9516,80.1462],[12.9675,80.1500],[12.9941,80.1709],[13.0067,80.2206],[13.0213,80.2231],[13.0418,80.2341],[13.0475,80.2489],[13.0827,80.2707],[13.0925,80.2870]],
+  [[13.0480,80.0960],[13.0359,80.1567],[13.0432,80.1737],[13.0510,80.2120],[13.0517,80.2264],[13.0569,80.2425],[13.0475,80.2489],[13.0546,80.2640],[13.0500,80.2824]],
+  [[12.9249,80.1000],[12.9184,80.1918],[12.9756,80.2207],[12.9650,80.2450],[12.9400,80.2350],[12.9010,80.2279]],
+  [[13.0480,80.0960],[13.0694,80.1948],[13.0510,80.2120],[13.0517,80.2264],[13.0827,80.2707],[13.0925,80.2870]],
+  [[13.1900,80.1830],[13.1590,80.1900],[13.1170,80.2140],[13.0850,80.2100],[13.0694,80.1948],[13.0510,80.2120],[13.0350,80.2100],[13.0067,80.2206],[12.9516,80.1462],[12.9249,80.1000]],
+  [[13.1600,80.3000],[13.1200,80.2900],[13.0925,80.2870],[13.0546,80.2640],[13.0330,80.2680],[13.0067,80.2570],[12.9830,80.2590]],
 ]
 
 function FlyToSelection({ bus, event }) {
@@ -52,8 +62,16 @@ function eventIcon(type) {
  *  looking at rather than four copies of one generic road. */
 function SceneSubject({ kind }) {
   if (kind === 'zebra') return (
-    <div className="zebra-crossing faded">
-      {[0, 1, 2, 3, 4].map(i => <i key={i} style={{ opacity: 0.9 - i * 0.16 }} />)}
+    <div className="zebra-scene">
+      {/* Bars run along the direction of travel and narrow toward the horizon,
+          which is what a forward camera actually sees. The faint ones are in the
+          wheel tracks — thermoplastic goes there first, and that uneven pattern
+          is the cue an inspector reads as "worn", not uniform dimming. */}
+      <div className="zebra-deck">
+        {[0.85, 0.3, 0.78, 0.22, 0.8, 0.34, 0.88].map((o, i) => (
+          <i key={i} style={{ opacity: o }} className={o < 0.4 ? 'worn' : ''} />
+        ))}
+      </div>
       <div className="hazard-box zebra-box"><span>FADED CROSSING</span><b>0.81</b></div>
     </div>
   )
@@ -197,7 +215,7 @@ function App() {
   return (
     <div className="shell">
       <header className="topbar">
-        <div className="brand-mark"><div className="brand-glyph">P</div><div><h1>PRAYAAN <span>V2</span></h1><p>URBAN INTELLIGENCE COMMAND CENTER</p></div></div>
+        <div className="brand-mark"><div className="brand-glyph">P</div><div><h1>PRAYAAN</h1><p>URBAN INTELLIGENCE COMMAND CENTER</p></div></div>
         <div className="top-status">
           <span className={`status-dot ${offline ? 'bad' : ''}`} />
           <span>{offline ? 'BACKEND OFFLINE' : 'PIPELINE ONLINE'}</span>
@@ -245,7 +263,7 @@ function App() {
             <div className="bus-list">
               {fleet.map(bus => (
                 <button key={bus.bus_id} onClick={() => { setSelectedBus(bus); setSelectedEvent(null); setActiveView('bus') }} className={selectedBus?.bus_id === bus.bus_id ? 'selected' : ''}>
-                  <span className="bus-pulse"/><div><b>{bus.bus_id}</b><small>{bus.route_name}</small></div><div className="bus-side"><strong>{bus.speed_kmh}</strong><small>km/h</small></div>
+                  <span className="bus-pulse"/><div><b>{bus.route_number || bus.bus_id}</b><small>{bus.route_name}</small></div><div className="bus-side"><strong>{bus.speed_kmh}</strong><small>km/h</small></div>
                 </button>
               ))}
             </div>
@@ -263,8 +281,15 @@ function App() {
 
           <div className="map-frame">
             <MapContainer center={CHENNAI} zoom={11} zoomControl={false} attributionControl={false} className="map">
-              <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
-              {ROUTE_LINES.map((line, idx) => <Polyline key={idx} positions={line} pathOptions={{ color: '#2a79ff', weight: 2, opacity: 0.35, dashArray: '5 8' }} />)}
+              {/* dark_all renders streets almost black. dark_matter keeps the dark theme but
+                  holds far more road detail, and a CSS brightness lift on the tile
+                  pane recovers the street network without washing out the overlays. */}
+              <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png" className="basemap-tiles"/>
+              <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png" className="basemap-labels"/>
+              {/* Two-pass route rendering: a wide soft glow under a crisp line. At 35%
+                  opacity on near-black tiles the corridors were effectively invisible. */}
+              {ROUTE_LINES.map((line, idx) => <Polyline key={`glow-${idx}`} positions={line} pathOptions={{ color: '#3b82f6', weight: 7, opacity: 0.16 }} />)}
+              {ROUTE_LINES.map((line, idx) => <Polyline key={idx} positions={line} pathOptions={{ color: '#6aa8ff', weight: 2, opacity: 0.75, dashArray: '6 7' }} />)}
               <LiveMap
                 fleet={animatedFleet}
                 trails={trails}
@@ -286,7 +311,7 @@ function App() {
                 apart. It is a readout, not decoration. */}
             <div
               className="lighting-veil"
-              style={{ opacity: 1 - (state?.lighting?.ambient ?? 1) }}
+              style={{ opacity: MAX_NIGHT_VEIL * (1 - (state?.lighting?.ambient ?? 1)) }}
             />
             <div className={`lighting-chip ${(state?.lighting?.regime || 'DAY').toLowerCase()}`}>
               <span>{state?.lighting?.regime || 'DAY'}</span>

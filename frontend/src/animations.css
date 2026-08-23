@@ -335,3 +335,44 @@
 .wo-counts span.disputed{border-color:rgba(251,113,133,.45)}
 .road-health-grid b small{display:block;margin-top:4px;font-size:6.5px;letter-spacing:.08em;color:#5e7c94;font-weight:400}
 .condition-bar i.unsurveyed,.condition-key i.unsurveyed{background:#22384c}
+
+/* ---- map legibility ------------------------------------------------------ */
+
+/* The basemap is split into a street layer and a label layer so each can be
+   tuned. Streets get lifted well clear of black; labels stay quiet so they never
+   compete with detections. */
+.basemap-tiles { filter: brightness(1.85) contrast(1.12) saturate(0.9); }
+.basemap-labels { filter: brightness(1.35); opacity: .72; }
+
+/* ---- zebra crossing, forward-camera view --------------------------------- */
+
+.zebra-scene { position: absolute; inset: 0; pointer-events: none; }
+
+/* Trapezoid deck: wide at the bottom of frame, narrow at the horizon. This is
+   what gives the crossing depth instead of looking like a flat barcode. */
+.zebra-deck {
+  position: absolute; left: 50%; bottom: 12%;
+  transform: translateX(-50%);
+  width: 78%; height: 78px;
+  display: flex; gap: 5px; justify-content: center;
+  clip-path: polygon(31% 0, 69% 0, 100% 100%, 0 100%);
+}
+.zebra-deck i {
+  flex: 1;
+  background: linear-gradient(180deg, #b9c9d8 0%, #eef5fb 42%, #f6fbff 100%);
+  border-radius: 1px;
+}
+/* Worn bars break up rather than dimming evenly — asphalt shows through in
+   patches, so a hard-edged mask reads truer than a lower opacity alone. */
+.zebra-deck i.worn {
+  background:
+    linear-gradient(180deg, transparent 0 18%, #cfdae6 18% 34%, transparent 34% 46%,
+                    #dbe6f0 46% 72%, transparent 72% 80%, #c6d3e0 80% 100%);
+}
+
+/* Three corridors now (OMR, Anna Salai, GST Road). The strip was hardcoded to
+   two slots, so the third was simply not rendered — a silent data loss in the
+   layout rather than in the data. Let it size to however many arrive. */
+.bottom-strip {
+  grid-template-columns: 145px repeat(auto-fit, minmax(170px, 1fr)) !important;
+}

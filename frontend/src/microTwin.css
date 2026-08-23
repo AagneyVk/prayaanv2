@@ -124,3 +124,84 @@
 /* Narrow enough that the track id never slides under the road-asset card. */
 .vehicle-incident{width:min(560px,48%) !important}
 .vehicle-incident-top b{font-size:12px}
+
+/* ==========================================================================
+   LAYOUT: keep the middle of the frame clear.
+
+   The 3D view is the evidence. Panels had drifted into the centre band — the
+   incident card spanned 48% across the bottom and the asset card ran most of the
+   right-hand height — so the traffic the operator is meant to be watching was
+   behind them. Everything now lives in two narrow rails with a clear corridor
+   down the middle, and each panel is translucent with a blur so the scene still
+   reads through it rather than being replaced by it.
+   ========================================================================== */
+
+:root { --rail-w: 268px; }
+
+/* --- left rail: what we found --------------------------------------------- */
+
+.scenario-stack {
+  left: 16px !important; top: 96px !important;
+  width: var(--rail-w) !important;
+  max-height: 30vh !important; overflow: hidden;
+}
+
+.vehicle-incident {
+  /* Back to the left rail, under the stack — NOT centred across the road. */
+  left: 16px !important; right: auto !important;
+  transform: none !important;
+  top: auto !important; bottom: 132px !important;
+  width: var(--rail-w) !important;
+  max-height: 46vh; overflow-y: auto;
+  padding: 12px 13px;
+  background: linear-gradient(135deg, rgba(42, 8, 14, .82), rgba(11, 6, 9, .82));
+  backdrop-filter: blur(14px);
+}
+@keyframes vehIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.vehicle-incident-grid { grid-template-columns: 1fr 1fr; }
+.vehicle-incident p { font-size: 8.5px; margin: 7px 0 9px; }
+
+.track-live {
+  left: 16px !important; bottom: 132px !important;
+  width: var(--rail-w) !important;
+}
+
+/* --- right rail: what it means -------------------------------------------- */
+
+.scenario-alert.persistent {
+  left: auto !important; right: 16px !important;
+  top: 96px !important; bottom: auto !important;
+  transform: none !important;
+  width: var(--rail-w) !important;
+  max-height: 62vh; overflow-y: auto;
+  background: rgba(8, 12, 18, .82);
+  backdrop-filter: blur(14px);
+}
+@keyframes eventPop { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+
+/* The HUD chips move to the very bottom corners, below the road band. */
+.micro-hud.left  { left: 16px !important; bottom: 84px !important; }
+.micro-hud.right { right: 16px !important; bottom: 84px !important; }
+
+/* Thin scrollbars so a capped panel does not gain a chunky gutter. */
+.vehicle-incident::-webkit-scrollbar,
+.scenario-alert.persistent::-webkit-scrollbar { width: 3px; }
+.vehicle-incident::-webkit-scrollbar-thumb,
+.scenario-alert.persistent::-webkit-scrollbar-thumb { background: rgba(255,255,255,.16); }
+
+/* On a short window the rails would meet in the middle; drop the least
+   time-critical panel rather than letting them overlap the road. */
+@media (max-height: 760px) {
+  .scenario-stack { max-height: 20vh !important; }
+  .vehicle-incident { max-height: 38vh; }
+}
+
+/* The two left-rail panels were overlapping by ~16px. Cap the stack so it always
+   ends above the incident card, and cap the incident so it cannot grow upward
+   into the stack — neither is allowed to expand into the other's space. */
+.scenario-stack { max-height: 22vh !important; }
+.vehicle-incident { max-height: 40vh !important; }
+@media (max-height: 800px) {
+  .scenario-stack { max-height: 17vh !important; }
+  .vehicle-incident { max-height: 34vh !important; }
+}

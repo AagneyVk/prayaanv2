@@ -9,37 +9,88 @@ from typing import Dict, List, Set, Tuple
 from .roadwork import RoadCondition, REPAIR_IRI_TARGET
 
 
-ROUTES = {
-    "MTC-021": [(13.0827, 80.2707), (13.0604, 80.2496), (13.0402, 80.2448), (13.0067, 80.2570), (12.9864, 80.2451)],
-    "MTC-034": [(13.1143, 80.1548), (13.0878, 80.1987), (13.0694, 80.1948), (13.0501, 80.2124), (13.0305, 80.2302)],
-    "MTC-057": [(12.9249, 80.1000), (12.9517, 80.1413), (12.9756, 80.2207), (13.0067, 80.2570), (13.0402, 80.2448)],
-    "MTC-102": [(13.0475, 80.2090), (13.0358, 80.2285), (13.0214, 80.2412), (13.0067, 80.2570), (12.9916, 80.2642)],
-    "MTC-118": [(13.0901, 80.2144), (13.0744, 80.2299), (13.0604, 80.2496), (13.0475, 80.2592), (13.0337, 80.2688)],
-    "MTC-145": [(12.9702, 80.2210), (12.9864, 80.2451), (13.0067, 80.2570), (13.0282, 80.2661), (13.0491, 80.2820)],
+# ---------------------------------------------------------------------------
+# Six real MTC services, chosen to cover the maximum number of Chennai arterials
+# rather than simply the six busiest routes.
+#
+# Coordinates are APPROXIMATE corridor geometry digitised from landmark
+# positions — they are not surveyed alignments, and the demo says so. What
+# matters for the pipeline is the topology: real arterials SHARE corridors, so
+# several services run the same stretch of road. That is what makes cross-bus
+# consensus possible in the first place, and the previous invented routes barely
+# touched, which is why so many assets could never reach two independent buses.
+# ---------------------------------------------------------------------------
+
+ROUTE_META = {
+    "MTC-21C": {"corridor": "GST Road → Anna Salai",
+                "areas": "Tambaram · Chromepet · Pallavaram · Airport · Guindy · Saidapet · T. Nagar · Broadway"},
+    "MTC-25G": {"corridor": "Poonamallee → Mount Road → Marina",
+                "areas": "Poonamallee · Porur · Valasaravakkam · Vadapalani · Kodambakkam · Nungambakkam · Royapettah · Marina"},
+    "MTC-500": {"corridor": "OMR / IT Corridor",
+                "areas": "Tambaram · Medavakkam · Velachery · Perungudi · Thoraipakkam · Sholinganallur"},
+    "MTC-108": {"corridor": "Poonamallee High Road (western)",
+                "areas": "Poonamallee · Koyambedu · Vadapalani · Kodambakkam · Central · Broadway"},
+    "MTC-114": {"corridor": "Northern + Inner Ring Road",
+                "areas": "Red Hills · Puzhal · Kolathur · Anna Nagar · CMBT · Vadapalani · Ashok Nagar · Guindy · Tambaram"},
+    "MTC-1":   {"corridor": "East / Central coastal",
+                "areas": "Thiruvottiyur · Broadway · Royapettah · Mylapore · Adyar · Thiruvanmiyur"},
 }
 
+ROUTES = {
+    # 21C — GST Road into Anna Salai, the southern arterial spine.
+    "MTC-21C": [(12.9249, 80.1000), (12.9516, 80.1462), (12.9675, 80.1500), (12.9941, 80.1709),
+                (13.0067, 80.2206), (13.0213, 80.2231), (13.0418, 80.2341), (13.0475, 80.2489),
+                (13.0827, 80.2707), (13.0925, 80.2870)],
+    # 25G — Poonamallee across the west, down Mount Road, out to the Marina.
+    "MTC-25G": [(13.0480, 80.0960), (13.0359, 80.1567), (13.0432, 80.1737), (13.0510, 80.2120),
+                (13.0517, 80.2264), (13.0569, 80.2425), (13.0475, 80.2489), (13.0546, 80.2640),
+                (13.0500, 80.2824)],
+    # 500 — the IT corridor. Shares Tambaram with 21C and 114.
+    "MTC-500": [(12.9249, 80.1000), (12.9184, 80.1918), (12.9756, 80.2207), (12.9650, 80.2450),
+                (12.9400, 80.2350), (12.9010, 80.2279)],
+    # 108 — Poonamallee High Road. Shares Vadapalani–Kodambakkam with 25G and
+    # Central–Broadway with 21C.
+    "MTC-108": [(13.0480, 80.0960), (13.0694, 80.1948), (13.0510, 80.2120), (13.0517, 80.2264),
+                (13.0827, 80.2707), (13.0925, 80.2870)],
+    # 114 — the ring. Shares CMBT–Vadapalani with 108 and Chromepet–Tambaram with 21C.
+    "MTC-114": [(13.1900, 80.1830), (13.1590, 80.1900), (13.1170, 80.2140), (13.0850, 80.2100),
+                (13.0694, 80.1948), (13.0510, 80.2120), (13.0350, 80.2100), (13.0067, 80.2206),
+                (12.9516, 80.1462), (12.9249, 80.1000)],
+    # 1 — the coastal run. Shares Broadway with 21C/108 and Royapettah with 25G.
+    "MTC-1":   [(13.1600, 80.3000), (13.1200, 80.2900), (13.0925, 80.2870), (13.0546, 80.2640),
+                (13.0330, 80.2680), (13.0067, 80.2570), (12.9830, 80.2590)],
+}
+
+# Assets sit MID-SEGMENT on stretches that two or more services share, because
+# that is where consensus can actually resolve them. Two are deliberately left on
+# single-service roads: those can never reach two independent buses, and the
+# system reports that as a coverage gap instead of hiding it.
 EVENT_SITES = [
-    {"id": "RD-1842", "type": "ROAD_DEFECT", "subtype": "POTHOLE", "lat": 13.0402, "lng": 80.2448, "severity": 0.88, "title": "Deep lane-edge pothole"},
-    {"id": "INF-220", "type": "INFRASTRUCTURE", "subtype": "DAMAGED_SIGNAGE", "lat": 13.0694, "lng": 80.1948, "severity": 0.63, "title": "Damaged directional sign"},
-    {"id": "HZ-091", "type": "ROAD_HAZARD", "subtype": "WATERLOGGING", "lat": 12.9864, "lng": 80.2451, "severity": 0.78, "title": "Recurring waterlogging"},
-    {"id": "SAFE-77", "type": "SAFETY", "subtype": "PEDESTRIAN_RISK", "lat": 13.0067, "lng": 80.2570, "severity": 0.72, "title": "Vulnerable pedestrian crossing"},
-    {"id": "LGT-334", "type": "INFRASTRUCTURE", "subtype": "STREETLIGHT_OUTAGE", "lat": 13.0604, "lng": 80.2496, "severity": 0.58, "title": "Dark streetlight span"},
-    {"id": "RD-2077", "type": "ROAD_DEFECT", "subtype": "FADED_MARKING", "lat": 13.0475, "lng": 80.2592, "severity": 0.49, "title": "Worn lane markings"},
-    # Placed along the 13.0402,80.2448 <-> 13.0067,80.2570 corridor, which BOTH
-    # MTC-021 and MTC-057 traverse. Mid-segment rather than on a junction: real
-    # defects sit on road, not on graph nodes, and two independent routes over
-    # the same stretch is what lets consensus actually resolve them.
-    {"id": "ZEB-118", "type": "SAFETY", "subtype": "FADED_ZEBRA_CROSSING", "lat": 13.0302, "lng": 80.2485, "severity": 0.71, "title": "Faded zebra crossing"},
-    {"id": "SIG-402", "type": "INFRASTRUCTURE", "subtype": "TRAFFIC_SIGNAL_FAULT", "lat": 13.0168, "lng": 80.2533, "severity": 0.83, "title": "Dark traffic signal head"},
-    {"id": "MAN-019", "type": "ROAD_HAZARD", "subtype": "MANHOLE_DAMAGE", "lat": 13.0117, "lng": 80.2552, "severity": 0.91, "title": "Sunken manhole cover"},
-    {"id": "DMP-055", "type": "SANITATION", "subtype": "ILLEGAL_DUMPING", "lat": 12.9966, "lng": 80.2511, "severity": 0.54, "title": "Recurring roadside dumping"},
+    # Vadapalani ↔ Kodambakkam — served by 25G and 108.
+    {"id": "RD-1842", "type": "ROAD_DEFECT", "subtype": "POTHOLE", "lat": 13.0512, "lng": 80.2163, "severity": 0.88, "title": "Deep lane-edge pothole"},
+    {"id": "HZ-091", "type": "ROAD_HAZARD", "subtype": "WATERLOGGING", "lat": 13.0515, "lng": 80.2221, "severity": 0.78, "title": "Recurring waterlogging"},
+    # Central ↔ Broadway — served by 21C and 108.
+    {"id": "ZEB-118", "type": "SAFETY", "subtype": "FADED_ZEBRA_CROSSING", "lat": 13.0857, "lng": 80.2756, "severity": 0.71, "wear": 0.58, "title": "Faded zebra crossing"},
+    {"id": "SAFE-77", "type": "SAFETY", "subtype": "PEDESTRIAN_RISK", "lat": 13.0896, "lng": 80.2822, "severity": 0.72, "title": "Vulnerable pedestrian crossing"},
+    # CMBT ↔ Vadapalani — served by 108 and 114.
+    {"id": "SIG-402", "type": "INFRASTRUCTURE", "subtype": "TRAFFIC_SIGNAL_FAULT", "lat": 13.0639, "lng": 80.2000, "severity": 0.83, "title": "Dark traffic signal head"},
+    {"id": "LGT-334", "type": "INFRASTRUCTURE", "subtype": "STREETLIGHT_OUTAGE", "lat": 13.0565, "lng": 80.2068, "severity": 0.58, "title": "Dark streetlight span"},
+    # Chromepet ↔ Tambaram — served by 21C and 114 (opposite directions).
+    {"id": "MAN-019", "type": "ROAD_HAZARD", "subtype": "MANHOLE_DAMAGE", "lat": 12.9436, "lng": 80.1323, "severity": 0.91, "title": "Sunken manhole cover"},
+    {"id": "DMP-055", "type": "SANITATION", "subtype": "ILLEGAL_DUMPING", "lat": 12.9356, "lng": 80.1185, "severity": 0.54, "title": "Recurring roadside dumping"},
+    # Single-service roads: permanent coverage gaps, reported as such.
+    {"id": "INF-220", "type": "INFRASTRUCTURE", "subtype": "DAMAGED_SIGNAGE", "lat": 13.0395, "lng": 80.1652, "severity": 0.63, "title": "Damaged directional sign"},
+    {"id": "RD-2077", "type": "ROAD_DEFECT", "subtype": "FADED_MARKING", "lat": 12.9948, "lng": 80.2580, "severity": 0.49, "wear": 0.42, "title": "Worn lane markings"},
 ]
+
 
 
 CORRIDORS = [
-    {"id": "COR-OMR", "name": "OMR Corridor", "normal_speed": 34.0, "base_speed": 18.0, "lat": 12.9864, "lng": 80.2451, "length_km": 7.4},
-    {"id": "COR-ANNA", "name": "Anna Salai", "normal_speed": 31.0, "base_speed": 14.0, "lat": 13.0604, "lng": 80.2496, "length_km": 5.8},
+    {"id": "COR-OMR", "name": "OMR (Rajiv Gandhi Salai)", "normal_speed": 38.0, "base_speed": 19.0, "lat": 12.9400, "lng": 80.2350, "length_km": 9.2},
+    {"id": "COR-ANNA", "name": "Anna Salai", "normal_speed": 31.0, "base_speed": 14.0, "lat": 13.0475, "lng": 80.2489, "length_km": 5.8},
+    {"id": "COR-GST", "name": "GST Road", "normal_speed": 42.0, "base_speed": 22.0, "lat": 12.9675, "lng": 80.1500, "length_km": 11.4},
 ]
+
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +164,36 @@ LIGHTING_RESPONSE = {
 # which is exactly why it is named and justified rather than folded into another
 # coefficient. It is also the number a real deployment would measure first.
 EFFECTIVE_LOOKS = 3
+
+# ---------------------------------------------------------------------------
+# Painted markings wear out, and how easy they are to DETECT is not monotonic
+# in how bad they are.
+#
+# A crisp crossing is not a defect. A half-worn one is unmistakable: bright bars
+# next to bare asphalt, high local contrast, obviously patchy. A fully worn one
+# is almost invisible again — there is barely any paint left to contrast with
+# anything, and a camera sees plain road.
+#
+# So detectability PEAKS at partial wear and falls away at both ends, while
+# severity rises monotonically. The practical consequence is uncomfortable and
+# worth stating out loud to an operator: the most dangerous crossings, the ones
+# worn to nothing, are the hardest for a vision system to find. That is an
+# argument for acting on the mid-wear detections early rather than waiting.
+MARKING_TYPES = {"FADED_MARKING", "FADED_ZEBRA_CROSSING"}
+MARKING_WEAR_PER_TICK = 0.00035
+MARKING_PEAK_WEAR = 0.65        # where contrast against asphalt is greatest
+MARKING_PEAK_WIDTH = 0.22
+
+
+def _marking_visibility(wear: float) -> float:
+    """Detectability of a painted marking as a function of how worn it is."""
+    peak = math.exp(-((wear - MARKING_PEAK_WEAR) ** 2) / (2 * MARKING_PEAK_WIDTH ** 2))
+    return 0.30 + 0.70 * peak
+
+
+def _marking_severity(wear: float) -> float:
+    """How dangerous it is, which unlike detectability only ever gets worse."""
+    return min(1.0, 0.22 + 0.75 * wear)
 
 # What a single-frame candidate is worth relative to one that persisted across
 # the whole approach. This is the quantitative form of "one frame is a rumour".
@@ -323,7 +404,9 @@ class Bus:
             "path": [(round(p[0], 6), round(p[1], 6)) for p in path],
             "speed_kmh": round(self.speed_kmh, 1),
             "heading": round(self.heading, 1),
-            "route_name": f"Route {self.bus_id.split('-')[-1]}",
+            "route_name": ROUTE_META.get(self.bus_id, {}).get("corridor", self.bus_id),
+            "route_number": self.bus_id.split("-", 1)[-1],
+            "areas": ROUTE_META.get(self.bus_id, {}).get("areas", ""),
             "route_progress": round((self.route_index + self.progress) / len(self.route), 3),
             # Which stretch of road the wheels are on. The inertial road-condition
             # memory is keyed on this, so it must come from the vehicle, not be
@@ -520,6 +603,9 @@ class UrbanSimulation:
         self.road = RoadCondition(ROUTES, _haversine_m, _deterministic_uniform)
         self._last_segment: Dict[str, str] = {}
         self._contractor_repairs: Dict[str, int] = {}
+        self._wear: Dict[str, float] = {
+            s["id"]: s.get("wear", 0.45) for s in EVENT_SITES if s["subtype"] in MARKING_TYPES
+        }
 
     @staticmethod
     def _spawn_buses() -> Dict[str, Bus]:
@@ -560,6 +646,26 @@ class UrbanSimulation:
         """
         schedule = {"HZ-091": 220, "LGT-334": 340}
         return schedule.get(site["id"])
+
+    def _wear_of(self, site: dict) -> float:
+        """Current paint wear for a marking, held PER SIMULATION.
+
+        This lived on the shared EVENT_SITES dicts, which are module-level: two
+        simulations would have silently shared one city's paint, and reset()
+        would not have restored it. Ground truth that evolves has to belong to
+        the instance that is evolving it.
+        """
+        return self._wear.get(site["id"], site.get("wear", 0.45))
+
+    def _advance_markings(self) -> None:
+        """Paint keeps wearing between passes, whether or not anyone looks."""
+        for site in EVENT_SITES:
+            if site["subtype"] not in MARKING_TYPES:
+                continue
+            if not self._site_present(site):
+                self._wear[site["id"]] = 0.04    # freshly repainted after a repair
+                continue
+            self._wear[site["id"]] = min(1.0, self._wear_of(site) + MARKING_WEAR_PER_TICK)
 
     def _site_present(self, site: dict) -> bool:
         repaired = self._repair_tick(site)
@@ -654,7 +760,14 @@ class UrbanSimulation:
             present = self._site_present(site)
             ambient = _ambient_light(self.tick)
             light_q = _lighting_factor(site["subtype"], ambient)
-            visibility = (0.55 + 0.45 * site["severity"]) * light_q
+            if site["subtype"] in MARKING_TYPES:
+                # Contrast, not severity, is what a camera can act on here.
+                base_vis = _marking_visibility(self._wear_of(site))
+            else:
+                base_vis = 0.55 + 0.45 * site["severity"]
+            severity_now = (_marking_severity(self._wear_of(site))
+                            if site["subtype"] in MARKING_TYPES else site["severity"])
+            visibility = base_vis * light_q
             p_frame = visibility * geo["range_quality"] * geo["angle_quality"] * geo["blur_quality"]
             p_detect = 1.0 - (1.0 - p_frame) ** EFFECTIVE_LOOKS
 
@@ -691,7 +804,10 @@ class UrbanSimulation:
             + 0.33 * geo["angle_quality"]
             + 0.25 * geo["blur_quality"]
         )
-        visibility = (0.55 + 0.45 * site["severity"]) * light_q
+        base_vis = (_marking_visibility(self._wear_of(site))
+                    if site["subtype"] in MARKING_TYPES
+                    else 0.55 + 0.45 * site["severity"])
+        visibility = base_vis * light_q
         confidence = min(0.96, max(0.50, 0.50 + 0.45 * visibility * quality))
 
         # GPS error: a few metres, deterministic per (bus, site, tick).
@@ -729,6 +845,12 @@ class UrbanSimulation:
                 "ambient_light": round(ambient, 3),
                 "lighting_quality": round(light_q, 3),
                 "lighting_regime": "DAY" if ambient > 0.6 else "NIGHT" if ambient < 0.25 else "TWILIGHT",
+                **({"paint_wear": round(self._wear_of(site), 3),
+                    "contrast_visibility": round(_marking_visibility(self._wear_of(site)), 3),
+                    "wear_note": (
+                        "Detectability peaks at partial wear; a marking worn to nothing "
+                        "is both more dangerous and harder to see."
+                    )} if site["subtype"] in MARKING_TYPES else {}),
             },
         )
 
@@ -1288,10 +1410,14 @@ class UrbanSimulation:
         self.road = RoadCondition(ROUTES, _haversine_m, _deterministic_uniform)
         self._last_segment = {}
         self._contractor_repairs = {}
+        self._wear = {
+            s["id"]: s.get("wear", 0.45) for s in EVENT_SITES if s["subtype"] in MARKING_TYPES
+        }
         return {"status": "reset", "seed": self.seed}
 
     def step(self, dt: float = 1.0) -> dict:
         self.tick += 1
+        self._advance_markings()
         sim_dt = dt * TICK_SECONDS
         buses = [bus.step(sim_dt, self.rng) for bus in self.buses.values()]
 
